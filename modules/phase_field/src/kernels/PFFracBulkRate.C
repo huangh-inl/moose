@@ -53,16 +53,20 @@ PFFracBulkRate::computeDFDOP(PFFunctionType type)
     {
       //Order parameter for damage variable
       Real c = _u[_qp];
+      if (c > 1.0) c = 1.0;
+      
       Real x =   _l * _betaval[_qp] + 2.0*(1.0-c) * _G0_pos[_qp]/gc - c/_l;
 
-      return -(( std::abs(x) + x )/2.0)/_visco;
+      return -(( std::abs(x) + x )/2.0)/_visco * gc;
     }
     case Jacobian:
     {
       Real c = _u[_qp];
+      if (c > 1.0) c = 1.0;
+      
       Real x = _l * _betaval[_qp] + 2.0 * (1.0 - c) * _G0_pos[_qp] / gc - c / _l;
       Real signx = x > 0.0 ? 1.0 : -1.0;
-      return (signx + 1.0)/2.0 * (2.0 * _G0_pos[_qp]/gc + 1.0/_l)/_visco;
+      return (signx + 1.0)/2.0 * (2.0 * _G0_pos[_qp]/gc + 1.0/_l)/_visco * gc;
     }
     default:
       mooseError("PFFracBulkRate: Invalid type passed - case must be either Residual or Jacobian");
@@ -91,13 +95,15 @@ PFFracBulkRate::computeQpOffDiagJacobian(unsigned int jvar)
   bool disp_flag = false;
 
   Real c = _u[_qp];
+  if (c > 1.0) c = 1.0;
+  
   Real gc = _gc_prop[_qp];
 
   Real x = _l * _betaval[_qp] + 2.0*(1.0-c) * (_G0_pos[_qp]/gc) - c/_l;
   Real signx = x > 0.0 ? 1.0 : -1.0;
 
-  Real xfacbeta = -((signx + 1.0)/2.0) / _visco * _l;
-  Real xfac = -((signx + 1.0)/2.0) / _visco * 2.0 * (1.0 - c) / gc;
+  Real xfacbeta = -((signx + 1.0)/2.0) / _visco * _l * gc;
+  Real xfac = -((signx + 1.0)/2.0) / _visco * 2.0 * (1.0 - c) / gc * gc;
 
   if (jvar == _beta_var)
     //Contribution of auxiliary variable to off diag Jacobian of c
