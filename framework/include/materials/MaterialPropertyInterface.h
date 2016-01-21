@@ -15,20 +15,19 @@
 #ifndef MATERIALPROPERTYINTERFACE_H
 #define MATERIALPROPERTYINTERFACE_H
 
-#include <map>
-#include <string>
-
 // MOOSE includes
-#include "MaterialProperty.h"
-#include "InputParameters.h"
-#include "MaterialData.h"
 #include "MooseTypes.h"
+#include "MaterialProperty.h"
+#include "MaterialData.h"
 #include "FEProblem.h"
 
 // Forward declarations
-class BlockRestrictable;
-class BoundaryRestrictable;
-class InterfaceCommunicationHelper;
+class MaterialPropertyInterface;
+class InputParameters;
+
+template<>
+InputParameters validParams<MaterialPropertyInterface>();
+
 
 /**
  * \class MaterialPropertyInterface
@@ -97,6 +96,13 @@ public:
   ///@}
 
   /**
+   * Return a material property that is initialized to zero by default and does
+   * not need to (but can) be declared by another material.
+   */
+  template<typename T>
+  const MaterialProperty<T> & getZeroMaterialProperty(const std::string & prop_name);
+
+  /**
    * Retrieve the block ids that the material property is defined
    * @param name The name of the material property
    * @return A vector the the block ids for the property
@@ -153,8 +159,11 @@ protected:
   /// The name of the object that this interface belongs to
   const std::string _mi_name;
 
+  /// The type of data
+  Moose::MaterialDataType _material_data_type;
+
   /// Pointer to the material data class that stores properties
-  MaterialData * _material_data;
+  MooseSharedPointer<MaterialData> _material_data;
 
   /// Reference to the FEProblem class
   FEProblem & _mi_feproblem;
@@ -220,6 +229,27 @@ private:
   /// Parameters of the object with this interface
   const InputParameters & _mi_params;
 };
+
+/**
+ * Helper function templates to set a variable to zero.
+ * Specializations may have to be implemented (for examples see
+ * RankTwoTensor, RankFourTensor, ElasticityTensorR4).
+ */
+template<typename T>
+inline void mooseSetToZero(T & v)
+{
+  /**
+   * The default for non-pointer types is to assign zero.
+   * This should either do something sensible, or throw a compiler error.
+   * Otherwise the T type is designed badly.
+   */
+  v = 0;
+}
+template<typename T>
+inline void mooseSetToZero(T* &)
+{
+  mooseError("Cannot use pointer types for MaterialProperty derivatives.");
+}
 
 template<typename T>
 const MaterialProperty<T> &
@@ -338,6 +368,24 @@ bool
 MaterialPropertyInterface::hasMaterialPropertyByName(const std::string & name)
 {
   return _material_data->haveProperty<T>(name);
+}
+
+template<typename T>
+const MaterialProperty<T> &
+MaterialPropertyInterface::getZeroMaterialProperty(const std::string & /*prop_name*/)
+{
+  // static zero property storage
+  static MaterialProperty<T> zero;
+
+  // resize to accomodate maximum number of qpoints
+  unsigned int nqp = _mi_feproblem.getMaxQps();
+  zero.resize(nqp);
+
+  // set values for all qpoints to zero
+  for (unsigned int qp = 0; qp < nqp; ++qp)
+    mooseSetToZero<T>(zero[qp]);
+
+  return zero;
 }
 
 #endif //MATERIALPROPERTYINTERFACE_H

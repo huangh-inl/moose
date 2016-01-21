@@ -15,25 +15,31 @@
 #ifndef ASSEMBLY_H
 #define ASSEMBLY_H
 
-#include <vector>
 #include "ParallelUniqueId.h"
-#include "MooseVariable.h"
-#include "MooseVariableScalar.h"
 #include "MooseTypes.h"
+#include "MooseVariableBase.h"
+
 // libMesh
-#include "libmesh/dof_map.h"
 #include "libmesh/dense_matrix.h"
 #include "libmesh/dense_vector.h"
-#include "libmesh/coupling_matrix.h"
-#include "libmesh/fe.h"
-#include "libmesh/quadrature.h"
-#include "libmesh/elem.h"
-#include "libmesh/node.h"
+#include "libmesh/fe_base.h"
+#include "libmesh/enum_quadrature_type.h"
 
 // MOOSE Forward Declares
 class MooseMesh;
 class ArbitraryQuadrature;
 class SystemBase;
+class MooseVariable;
+
+// libMesh forward declarations
+namespace libMesh
+{
+class DofMap;
+class CouplingMatrix;
+class Elem;
+class Node;
+template <typename T> class SparseMatrix;
+}
 
 /**
  * Keeps track of stuff related to assembling
@@ -342,6 +348,20 @@ public:
   void cacheResidual();
 
   /**
+   * Cache individual residual contributions.  These will ultimately get added to the residual when addCachedResidual() is called.
+   *
+   * @param dof The degree of freedom to add the residual contribution to
+   * @param value The value of the residual contribution.
+   * @param type Whether the contribution should go to the Time or Non-Time residual
+   */
+  void cacheResidualContribution(dof_id_type dof, Real value, Moose::KernelType type);
+
+  /**
+   * Lets an external class cache residual at a set of nodes
+   */
+  void cacheResidualNodes(DenseVector<Number> & res, std::vector<dof_id_type> & dof_index);
+
+  /**
    * Takes the values that are currently in _sub_Ke and appends them to the cached values.
    */
   void cacheResidualNeighbor();
@@ -422,31 +442,24 @@ public:
   std::map<FEType, bool> _need_second_derivative;
 
   /**
-   * Caches the NodalBC Jacobian entry 'value', to eventually be
-   * stored in the (i,j) location of the matrix.
-   *
-   * We can't add NodalBC values to the Jacobian (or preconditioning)
-   * matrix at the time they are computed -- we instead need to
-   * overwrite an entire row of values with the Jacobian associated to
-   * the NodalBC, which may be coupled to other variables, *after*
-   * matrix assembly is finished.
+   * Caches the Jacobian entry 'value', to eventually be
+   * added/set in the (i,j) location of the matrix.
    *
    * We use numeric_index_type for the index arrays (rather than
    * dof_id_type) since that is what the SparseMatrix interface uses,
    * but at the time of this writing, those two types are equivalent.
    */
-  void cacheNodalBCJacobianEntry(numeric_index_type i, numeric_index_type j, Real value);
+  void cacheJacobianContribution(numeric_index_type i, numeric_index_type j, Real value);
 
   /**
-   * Clears any cached NodalBC Jacobian entries that have been
-   * accumulated during previous Assembly calls.
+   * Sets previously-cached Jacobian values via SparseMatrix::set() calls.
    */
-  void clearCachedNodalBCJacobianEntries();
+  void setCachedJacobianContributions(SparseMatrix<Number> & jacobian);
 
   /**
-   * Sets previously-cached NodalBC Jacobian values via SparseMatrix::set() calls.
+   * Adds previously-cached Jacobian values via SparseMatrix::add() calls.
    */
-  void setCachedNodalBCJacobianEntries(SparseMatrix<Number> & jacobian);
+  void addCachedJacobianContributions(SparseMatrix<Number> & jacobian);
 
 protected:
   /**
@@ -474,6 +487,14 @@ protected:
   void setResidualBlock(NumericVector<Number> & residual, DenseVector<Number> & res_block, std::vector<dof_id_type> & dof_indices, Real scaling_factor);
 
   void addJacobianBlock(SparseMatrix<Number> & jacobian, DenseMatrix<Number> & jac_block, const std::vector<dof_id_type> & idof_indices, const std::vector<dof_id_type> & jdof_indices, Real scaling_factor);
+
+
+  /**
+   * Clear any currently cached jacobian contributions
+   *
+   * This is automatically called by setCachedJacobianContributions and addCachedJacobianContributions
+   */
+  void clearCachedJacobianContributions();
 
   SystemBase & _sys;
   /// Reference to coupling matrix
@@ -701,11 +722,11 @@ protected:
   std::vector<dof_id_type> _temp_dof_indices;
 
   /**
-   * Storage for cached NodalBC data.
+   * Storage for cached Jacobian entries
    */
-  std::vector<Real> _cached_nodal_bc_vals;
-  std::vector<numeric_index_type> _cached_nodal_bc_rows;
-  std::vector<numeric_index_type> _cached_nodal_bc_cols;
+  std::vector<Real> _cached_jacobian_contribution_vals;
+  std::vector<numeric_index_type> _cached_jacobian_contribution_rows;
+  std::vector<numeric_index_type> _cached_jacobian_contribution_cols;
 };
 
 #endif /* ASSEMBLY_H */

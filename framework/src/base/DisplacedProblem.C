@@ -12,11 +12,20 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
+// MOOSE includes
 #include "DisplacedProblem.h"
 #include "Problem.h"
 #include "SubProblem.h"
 #include "UpdateDisplacedMeshThread.h"
+#include "ResetDisplacedMeshThread.h"
 #include "MooseApp.h"
+#include "MooseMesh.h"
+#include "Assembly.h"
+#include "FEProblem.h"
+#include "NonlinearSystem.h"
+
+// libMesh includes
+#include "libmesh/numeric_vector.h"
 
 template<>
 InputParameters validParams<DisplacedProblem>()
@@ -47,6 +56,24 @@ DisplacedProblem::~DisplacedProblem()
 {
   for (unsigned int i = 0; i < libMesh::n_threads(); ++i)
     delete _assembly[i];
+}
+
+bool
+DisplacedProblem::isTransient() const
+{
+  return _mproblem.isTransient();
+}
+
+Moose::CoordinateSystemType
+DisplacedProblem::getCoordSystem(SubdomainID sid)
+{
+  return _mproblem.getCoordSystem(sid);
+}
+
+std::set<dof_id_type> &
+DisplacedProblem::ghostedElems()
+{
+  return _mproblem.ghostedElems();
 }
 
 void
@@ -113,10 +140,11 @@ DisplacedProblem::updateMesh(const NumericVector<Number> & soln, const NumericVe
   _nl_solution = &soln;
   _aux_solution = &aux_soln;
 
-  Threads::parallel_for (*_mesh.getActiveSemiLocalNodeRange(), UpdateDisplacedMeshThread(*this));
+  UpdateDisplacedMeshThread udmt(_mproblem, *this);
+
+  Threads::parallel_reduce(*_mesh.getActiveSemiLocalNodeRange(), udmt);
 
   // Update the geometric searches that depend on the displaced mesh
-  // if (_displaced_nl.currentlyComputingJacobian())
   _geometric_search_data.update();
 
   // Since the Mesh changed, update the PointLocator object used by DiracKernels.
@@ -237,20 +265,21 @@ DisplacedProblem::reinitDirac(const Elem * elem, THREAD_ID tid)
 {
   std::vector<Point> & points = _dirac_kernel_info.getPoints()[elem];
 
-  bool have_points = points.size();
+  unsigned int n_points = points.size();
 
-  if (have_points)
+  if (n_points)
   {
     _assembly[tid]->reinitAtPhysical(elem, points);
 
     _displaced_nl.prepare(tid);
     _displaced_aux.prepare(tid);
-    _assembly[tid]->prepare();
 
     reinitElem(elem, tid);
   }
 
-  return have_points;
+  _assembly[tid]->prepare();
+
+  return n_points > 0;
 }
 
 
@@ -306,6 +335,13 @@ DisplacedProblem::reinitNodes(const std::vector<dof_id_type> & nodes, THREAD_ID 
 {
   _displaced_nl.reinitNodes(nodes, tid);
   _displaced_aux.reinitNodes(nodes, tid);
+}
+
+void
+DisplacedProblem::reinitNodesNeighbor(const std::vector<dof_id_type> & nodes, THREAD_ID tid)
+{
+  _displaced_nl.reinitNodesNeighbor(nodes, tid);
+  _displaced_aux.reinitNodesNeighbor(nodes, tid);
 }
 
 void
@@ -572,6 +608,11 @@ DisplacedProblem::undisplaceMesh()
   // require this.  We are using the GRAIN_SIZE=1 from MooseMesh.C,
   // not sure how this value was decided upon.
   //
+  // (DRG: The grainsize parameter is ultimately passed to TBB to help
+  // it choose how to split up the range.  A grainsize of 1 says "split
+  // it as much as you want".  Years ago I experimentally found that it
+  // didn't matter much and that using 1 was fine.)
+  //
   // Note: we don't have to invalidate/update as much stuff as
   // DisplacedProblem::updateMesh() does, since this will be handled
   // by a later call to updateMesh().
@@ -579,6 +620,8 @@ DisplacedProblem::undisplaceMesh()
                        _mesh.getMesh().nodes_end(),
                        /*grainsize=*/1);
 
+  ResetDisplacedMeshThread rdmt(_mproblem, *this);
+
   // Undisplace the mesh using threads.
-  Threads::parallel_for (node_range, UpdateDisplacedMeshThread(*this));
+  Threads::parallel_reduce (node_range, rdmt);
 }

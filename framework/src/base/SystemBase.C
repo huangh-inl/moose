@@ -23,8 +23,8 @@
 #include "MooseTypes.h"
 #include "InitialCondition.h"
 #include "ScalarInitialCondition.h"
-// libMesh
-#include "libmesh/quadrature_gauss.h"
+#include "Assembly.h"
+#include "MooseMesh.h"
 
 /// Free function used for a libMesh callback
 void extraSendList(std::vector<dof_id_type> & send_list, void * context)
@@ -84,7 +84,6 @@ SystemBase::SystemBase(SubProblem & subproblem, const std::string & name) :
     _factory(_app.getFactory()),
     _mesh(subproblem.mesh()),
     _name(name),
-    _currently_computing_jacobian(false),
     _vars(libMesh::n_threads()),
     _var_map()
 {
@@ -379,6 +378,18 @@ SystemBase::reinitNodes(const std::vector<dof_id_type> & nodes, THREAD_ID tid)
     MooseVariable *var = *it;
     var->reinitNodes(nodes);
     var->computeNodalValues();
+  }
+}
+
+void
+SystemBase::reinitNodesNeighbor(const std::vector<dof_id_type> & nodes, THREAD_ID tid)
+{
+  const std::vector<MooseVariable *> & vars = _vars[tid].variables();
+  for (std::vector<MooseVariable *>::const_iterator it = vars.begin(); it != vars.end(); ++it)
+  {
+    MooseVariable *var = *it;
+    var->reinitNodesNeighbor(nodes);
+    var->computeNodalNeighborValues();
   }
 }
 

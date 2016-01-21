@@ -15,35 +15,27 @@
 #ifndef FEPROBLEM_H
 #define FEPROBLEM_H
 
-#include "Moose.h"
+// MOOSE includes
 #include "SubProblem.h"
 #include "AuxiliarySystem.h"
-#include "Assembly.h"
 #include "GeometricSearchData.h"
-#include "MaterialWarehouse.h"
-#include "MaterialPropertyStorage.h"
 #include "PostprocessorWarehouse.h"
 #include "PostprocessorData.h"
 #include "VectorPostprocessorWarehouse.h"
-#include "VectorPostprocessorData.h"
 #include "Adaptivity.h"
-#include "Resurrector.h"
-#include "IndicatorWarehouse.h"
-#include "MarkerWarehouse.h"
-#include "MultiAppWarehouse.h"
-#include "TransferWarehouse.h"
-#include "MooseEnum.h"
-#include "Resurrector.h"
 #include "UserObjectWarehouse.h"
-#include "NonlinearSystem.h"
+#include "InitialConditionWarehouse.h"
 #include "Restartable.h"
 #include "SolverParams.h"
-#include "OutputWarehouse.h"
-#include "MooseApp.h"
 #include "PetscSupport.h"
+#include "MooseApp.h"
+#include "ExecuteMooseObjectWarehouse.h"
 
+// libMesh includes
+#include "libmesh/enum_quadrature_type.h"
+
+// Forward declarations
 class DisplacedProblem;
-
 class FEProblem;
 class MooseMesh;
 class NonlinearSystem;
@@ -51,6 +43,28 @@ class RandomInterface;
 class RandomData;
 class MeshChangedInterface;
 class MultiMooseEnum;
+class MaterialPropertyStorage;
+class MaterialData;
+class VectorPostprocessorData;
+class MooseEnum;
+class Resurrector;
+class Assembly;
+class JacobianBlock;
+class Control;
+class MultiApp;
+class TransientMultiApp;
+class ScalarInitialCondition;
+class Indicator;
+class InternalSideIndicator;
+class Marker;
+class Material;
+class Transfer;
+
+// libMesh forward declarations
+namespace libMesh
+{
+class CouplingMatrix;
+}
 
 template<>
 InputParameters validParams<FEProblem>();
@@ -130,9 +144,9 @@ public:
   void setCouplingMatrix(CouplingMatrix * cm);
   CouplingMatrix * & couplingMatrix() { return _cm; }
 
-  bool areCoupled(unsigned int ivar, unsigned int jvar) { return (*_cm)(ivar, jvar); }
+  bool areCoupled(unsigned int ivar, unsigned int jvar);
 
-  std::vector<std::pair<MooseVariable *, MooseVariable *> > & couplingEntries(THREAD_ID tid) { return _assembly[tid]->couplingEntries(); }
+  std::vector<std::pair<MooseVariable *, MooseVariable *> > & couplingEntries(THREAD_ID tid);
 
   /**
    * Check for converence of the nonlinear solution
@@ -262,6 +276,7 @@ public:
   virtual void reinitNode(const Node * node, THREAD_ID tid);
   virtual void reinitNodeFace(const Node * node, BoundaryID bnd_id, THREAD_ID tid);
   virtual void reinitNodes(const std::vector<dof_id_type> & nodes, THREAD_ID tid);
+  virtual void reinitNodesNeighbor(const std::vector<dof_id_type> & nodes, THREAD_ID tid);
   virtual void reinitNeighbor(const Elem * elem, unsigned int side, THREAD_ID tid);
   virtual void reinitNeighborPhys(const Elem * neighbor, unsigned int neighbor_side, const std::vector<Point> & physical_points, THREAD_ID tid);
   virtual void reinitNodeNeighbor(const Node * node, THREAD_ID tid);
@@ -273,7 +288,6 @@ public:
   virtual void clearDiracInfo();
 
   virtual void subdomainSetup(SubdomainID subdomain, THREAD_ID tid);
-  virtual void subdomainSetupSide(SubdomainID subdomain, THREAD_ID tid);
 
   /**
    * Whether or not this problem should utilize FE shape function caching.
@@ -309,11 +323,15 @@ public:
   virtual void checkExceptionAndStopSolve();
 
   virtual bool converged();
-  virtual unsigned int nNonlinearIterations() { return _nl.nNonlinearIterations(); }
-  virtual unsigned int nLinearIterations() { return _nl.nLinearIterations(); }
-  virtual Real finalNonlinearResidual() { return _nl.finalNonlinearResidual(); }
+  virtual unsigned int nNonlinearIterations();
+  virtual unsigned int nLinearIterations();
+  virtual Real finalNonlinearResidual();
+  virtual bool computingInitialResidual();
 
-  virtual bool computingInitialResidual() { return _nl.computingInitialResidual(); }
+  /**
+   * Returns true if we are currently computing Jacobian
+   */
+  virtual bool currentlyComputingJacobian() { return _currently_computing_jacobian; }
 
   /**
    * The relative (both to solution size and dt) change in the L2 norm of the solution vector.
@@ -396,6 +414,7 @@ public:
   void addVariable(const std::string & var_name, const FEType & type, Real scale_factor, const std::set< SubdomainID > * const active_subdomains = NULL);
   void addScalarVariable(const std::string & var_name, Order order, Real scale_factor = 1., const std::set< SubdomainID > * const active_subdomains = NULL);
   void addKernel(const std::string & kernel_name, const std::string & name, InputParameters parameters);
+  void addNodalKernel(const std::string & kernel_name, const std::string & name, InputParameters parameters);
   void addScalarKernel(const std::string & kernel_name, const std::string & name, InputParameters parameters);
   void addBoundaryCondition(const std::string & bc_name, const std::string & name, InputParameters parameters);
   void addConstraint(const std::string & c_name, const std::string & name, InputParameters parameters);
@@ -526,7 +545,7 @@ public:
   /**
    * Returns whether or not the current simulation has any multiapps
    */
-  bool hasMultiApps() const { return _has_multiapps; }
+  bool hasMultiApps() const { return _multi_apps.hasActiveObjects(); }
   bool hasMultiApp(const std::string & name);
 
   /**
@@ -564,9 +583,6 @@ public:
   ExecStore<VectorPostprocessorWarehouse> & getVectorPostprocessorWarehouse();
 
 
-  virtual void computeUserObjects(ExecFlagType type = EXEC_TIMESTEP_END, UserObjectWarehouse::GROUP group = UserObjectWarehouse::ALL);
-  virtual void computeAuxiliaryKernels(ExecFlagType type = EXEC_LINEAR);
-
   // Dampers /////
   void addDamper(std::string damper_name, const std::string & name, InputParameters parameters);
   void setupDampers();
@@ -590,7 +606,7 @@ public:
   /**
    * Get a MultiApp object by name.
    */
-  MultiApp * getMultiApp(const std::string & multi_app_name);
+  MooseSharedPointer<MultiApp> getMultiApp(const std::string & multi_app_name);
 
   /**
    * Execute the MultiApps associated with the ExecFlagType
@@ -768,6 +784,20 @@ public:
   const MaterialPropertyStorage & getBndMaterialPropertyStorage() { return _bnd_material_props; }
   ///@}
 
+  ///@{
+  /**
+   * Return indicator/marker storage.
+   */
+  const MooseObjectWarehouse<Indicator> & getIndicatorWarehouse() { return _indicators; }
+  const MooseObjectWarehouse<InternalSideIndicator> & getInternalSideIndicatorWarehouse() { return _internal_side_indicators; }
+  const MooseObjectWarehouse<Marker> & getMarkerWarehouse() { return _markers; }
+  ///@}
+
+  /**
+   * Return InitialCondition storage
+   */
+  const InitialConditionWarehouse & getInitialConditionWarehouse() const { return _ics; }
+
   /**
    * Get the solver parameters
    */
@@ -861,20 +891,19 @@ public:
    */
   unsigned int subspaceDim(const std::string& prefix) const {if (_subspace_dim.count(prefix)) return _subspace_dim.find(prefix)->second; else return 0;}
 
+  ///@{
   /*
-   * Return a reference to the MaterialWarehouse
+   * Return a reference to the material warehouse
    */
-  MaterialWarehouse & getMaterialWarehouse(THREAD_ID tid);
+  const MooseObjectWarehouse<Material> & getMaterialWarehouse() { return _materials; }
+  const MooseObjectWarehouse<Material> & getFaceMaterialWarehouse() { return _face_materials; }
+  const MooseObjectWarehouse<Material> & getNeighborMaterialWarehouse() { return _neighbor_materials; }
+  ///@}
 
   /*
    * Return a pointer to the MaterialData
    */
-  MaterialData * getMaterialData(THREAD_ID tid) { return _material_data[tid]; }
-
-  /*
-   * Return a pointer to the MaterialData for boundary properties
-   */
-  MaterialData * getBoundaryMaterialData(THREAD_ID tid) { return _bnd_material_data[tid]; }
+  MooseSharedPointer<MaterialData> getMaterialData(Moose::MaterialDataType, THREAD_ID tid = 0);
 
   ///@{
   /**
@@ -887,6 +916,59 @@ public:
 
   /// Returns whether or not this Problem has a TimeIntegrator
   bool hasTimeIntegrator() const { return _has_time_integrator; }
+
+  /**
+   * Return the current execution flag.
+   *
+   * Returns EXEC_NONE when not being executed.
+   * @see FEProblem::execute
+   */
+  const ExecFlagType & getCurrentExecuteOnFlag() const;
+
+
+  /**
+   * Convenience function for performing execution of MOOSE systems.
+   */
+  void execute(const ExecFlagType & exec_type);
+
+  /**
+   * Call compute methods on UserObjects.
+   */
+  virtual void computeUserObjects(const ExecFlagType & type, const UserObjectWarehouse::GROUP & group);
+
+  /**
+   * Call compute methods on AuxKernels
+   */
+  virtual void computeAuxiliaryKernels(const ExecFlagType & type);
+
+public:
+
+  ///@{
+  /**
+   * Convenience zeros
+   * @see ZeroInterface
+   */
+  std::vector<Real> _real_zero;
+  std::vector<VariableValue> _zero;
+  std::vector<VariableGradient> _grad_zero;
+  std::vector<VariableSecond> _second_zero;
+  std::vector<VariablePhiSecond> _second_phi_zero;
+  ///@}
+
+  /**
+   * Reference to the control logic warehouse.
+   */
+  ExecuteMooseObjectWarehouse<Control> & getControlWarehouse() { return _control_warehouse; }
+
+  /**
+   * Performs setup and execute calls for Control objects.
+   */
+  void executeControls(const ExecFlagType & exec_type);
+
+  /**
+   * Update the active objects in the warehouses
+   */
+  void updateActiveObjects();
 
 protected:
   MooseMesh & _mesh;
@@ -922,27 +1004,37 @@ protected:
   std::vector<Assembly *> _assembly;
 
   /// functions
-  std::vector<std::map<std::string, MooseSharedPointer<Function> > > _functions;
+  MooseObjectWarehouse<Function>_functions;
 
-  /// Initial condition warehouses (one for each thread)
-  std::vector<InitialConditionWarehouse> _ics;
+  ///@{
+  /// Initial condition storage
+  InitialConditionWarehouse _ics;
+  MooseObjectWarehouseBase<ScalarInitialCondition> _scalar_ics; // use base b/c of setup methods
+  ///@}
 
   // material properties
   MaterialPropertyStorage & _material_props;
   MaterialPropertyStorage & _bnd_material_props;
 
-  std::vector<MaterialData *> _material_data;
-  std::vector<MaterialData *> _bnd_material_data;
-  std::vector<MaterialData *> _neighbor_material_data;
+  std::vector<MooseSharedPointer<MaterialData> > _material_data;
+  std::vector<MooseSharedPointer<MaterialData> > _bnd_material_data;
+  std::vector<MooseSharedPointer<MaterialData> > _neighbor_material_data;
 
-  // materials
-  std::vector<MaterialWarehouse> _materials;
+  ///@{
+  // Material Warehouses
+  MooseObjectWarehouse<Material> _materials;
+  MooseObjectWarehouse<Material> _face_materials;
+  MooseObjectWarehouse<Material> _neighbor_materials;
+  ///@}
 
-  // indicators
-  std::vector<IndicatorWarehouse> _indicators;
+  ///@{
+  // Indicator Warehouses
+  MooseObjectWarehouse<Indicator> _indicators;
+  MooseObjectWarehouse<InternalSideIndicator> _internal_side_indicators;
+  ///@}
 
-  // markers
-  std::vector<MarkerWarehouse> _markers;
+  // Marker Warehouse
+  MooseObjectWarehouse<Marker> _markers;
 
   // postprocessors
   PostprocessorData _pps_data;
@@ -955,16 +1047,20 @@ protected:
   // user objects
   ExecStore<UserObjectWarehouse> _user_objects;
 
-  ExecStore<MultiAppWarehouse> _multi_apps;
+  /// MultiApp Warehouse
+  ExecuteMooseObjectWarehouse<MultiApp> _multi_apps;
+
+  /// Storage for TransientMultiApps (only needed for calling 'computeDT')
+  ExecuteMooseObjectWarehouse<TransientMultiApp> _transient_multi_apps;
 
   /// Normal Transfers
-  ExecStore<TransferWarehouse> _transfers;
+  ExecuteMooseObjectWarehouse<Transfer> _transfers;
 
   /// Transfers executed just before MultiApps to transfer data to them
-  ExecStore<TransferWarehouse> _to_multi_app_transfers;
+  ExecuteMooseObjectWarehouse<Transfer> _to_multi_app_transfers;
 
   /// Transfers executed just after MultiApps to transfer data from them
-  ExecStore<TransferWarehouse> _from_multi_app_transfers;
+  ExecuteMooseObjectWarehouse<Transfer> _from_multi_app_transfers;
 
   /// A map of objects that consume random numbers
   std::map<std::string, RandomData *> _random_data_objects;
@@ -978,9 +1074,14 @@ protected:
   /// Objects to be notified when the mesh changes
   std::vector<MeshChangedInterface *> _notify_when_mesh_changes;
 
-  void computeUserObjectsInternal(ExecFlagType type, UserObjectWarehouse::GROUP group);
-
   void checkUserObjects();
+
+  /**
+   * Helper method for checking Material object dependency.
+   *
+   * @see checkProblemIntegrity
+   */
+  static void checkDependMaterialsHelper(const std::map<SubdomainID, std::vector<MooseSharedPointer<Material> > > & materials_map);
 
   /// Verify that there are no element type/coordinate type conflicts
   void checkCoordinateSystems();
@@ -1010,9 +1111,6 @@ protected:
 
   /// Whether or not this system has any Constraints.
   bool _has_constraints;
-
-  /// Whether or not this system has any multiapps
-  bool _has_multiapps;
 
   /// Whether nor not stateful materials have been initialized
   bool _has_initialized_stateful;
@@ -1052,14 +1150,16 @@ protected:
   /// The error message to go with an exception
   std::string _exception_message;
 
+  /// Current execute_on flag
+  ExecFlagType _current_execute_on_flag;
+
+  /// The control logic warehouse
+  ExecuteMooseObjectWarehouse<Control> _control_warehouse;
+
 #ifdef LIBMESH_HAVE_PETSC
   /// PETSc option storage
   Moose::PetscSupport::PetscOptions _petsc_options;
 #endif //LIBMESH_HAVE_PETSC
-
-public:
-  /// number of instances of FEProblem (to distinguish Systems when coupling problems together)
-  static unsigned int _n;
 
 private:
   bool _use_legacy_uo_aux_computation;
@@ -1068,13 +1168,14 @@ private:
   bool _error_on_jacobian_nonzero_reallocation;
   bool _fail_next_linear_convergence_check;
 
+  /// Whether or not the system is currently computing the Jacobian matrix
+  bool _currently_computing_jacobian;
+
   friend class AuxiliarySystem;
   friend class NonlinearSystem;
   friend class EigenSystem;
   friend class Resurrector;
   friend class RestartableDataIO;
-  friend class ComputeInitialConditionThread;
-  friend class ComputeBoundaryInitialConditionThread;
   friend class Restartable;
   friend class DisplacedProblem;
 };

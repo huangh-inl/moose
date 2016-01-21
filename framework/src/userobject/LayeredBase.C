@@ -12,7 +12,11 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
+// MOOSE includes
 #include "LayeredBase.h"
+#include "UserObject.h"
+#include "SubProblem.h"
+#include "MooseMesh.h"
 
 // libmesh includes
 #include "libmesh/mesh_tools.h"
@@ -36,7 +40,7 @@ InputParameters validParams<LayeredBase>()
 }
 
 LayeredBase::LayeredBase(const InputParameters & parameters) :
-    _layered_base_name(parameters.get<std::string>("name")),
+    _layered_base_name(parameters.get<std::string>("_object_name")),
     _layered_base_params(parameters),
     _direction_enum(parameters.get<MooseEnum>("direction")),
     _direction(_direction_enum),

@@ -11,11 +11,13 @@
 /*                                                              */
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
-#include "NodeFaceConstraint.h"
 
+#include "NodeFaceConstraint.h"
 #include "SystemBase.h"
 #include "PenetrationLocator.h"
 #include "MooseEnum.h"
+#include "Assembly.h"
+#include "MooseMesh.h"
 
 // libMesh includes
 #include "libmesh/string_to_enum.h"

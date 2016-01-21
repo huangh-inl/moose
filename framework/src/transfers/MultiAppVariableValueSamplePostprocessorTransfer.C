@@ -12,13 +12,14 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
+// MOOSE includes
 #include "MultiAppVariableValueSamplePostprocessorTransfer.h"
-
-// Moose
 #include "MooseTypes.h"
 #include "FEProblem.h"
+#include "MultiApp.h"
+#include "MooseMesh.h"
 
-// libMesh
+// libMesh includes
 #include "libmesh/meshfree_interpolation.h"
 #include "libmesh/system.h"
 
@@ -47,7 +48,7 @@ MultiAppVariableValueSamplePostprocessorTransfer::execute()
   {
     case TO_MULTIAPP:
     {
-      FEProblem & from_problem = *_multi_app->problem();
+      FEProblem & from_problem = _multi_app->problem();
       MooseVariable & from_var = from_problem.getVariable(0, _from_var_name);
       SystemBase & from_system_base = from_var.sys();
       SubProblem & from_sub_problem = from_system_base.subproblem();
@@ -81,7 +82,7 @@ MultiAppVariableValueSamplePostprocessorTransfer::execute()
         }
 
         if (_multi_app->hasLocalApp(i))
-          _multi_app->appProblem(i)->getPostprocessorValue(_postprocessor_name) = value;
+          _multi_app->appProblem(i).getPostprocessorValue(_postprocessor_name) = value;
       }
 
       break;
@@ -95,4 +96,3 @@ MultiAppVariableValueSamplePostprocessorTransfer::execute()
 
   _console << "Finished VariableValueSamplePostprocessorTransfer " << name() << std::endl;
 }
-

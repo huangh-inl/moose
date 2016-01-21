@@ -4,8 +4,10 @@
 /*          All contents are licensed under LGPL V2.1           */
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
+
 #include "ElementPropertyReadFile.h"
 #include "MooseRandom.h"
+#include "MooseMesh.h"
 
 template<>
 InputParameters validParams<ElementPropertyReadFile>()
@@ -40,6 +42,7 @@ ElementPropertyReadFile::ElementPropertyReadFile(const InputParameters & paramet
     _range(i) = _top_right(i) - _bottom_left(i);
   }
 
+  _max_range = _range(0);
   for (unsigned int i = 1; i < LIBMESH_DIM; i++)
     if (_range(i) > _max_range)
       _max_range = _range(i);

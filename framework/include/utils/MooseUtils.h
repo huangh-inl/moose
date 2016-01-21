@@ -14,23 +14,24 @@
 #ifndef MOOSEUTILS_H
 #define MOOSEUTILS_H
 
-// STL includes
-#include <string>
-#include <vector>
-#include <map>
-#include <sstream>
-#include <algorithm>
-
 // MOOSE includes
 #include "HashMap.h"
-#include "Moose.h"
+#include "MaterialProperty.h" // MaterialProperties
 
 // libMesh includes
 #include "libmesh/parallel.h"
-#include "libmesh/elem.h"
+
+// C++ includes
+#include <string>
+#include <vector>
+#include <map>
+#include <list>
 
 // Forward Declarations
-class MaterialProperties;
+namespace libMesh
+{
+class Elem;
+}
 
 namespace MooseUtils
 {
@@ -111,6 +112,11 @@ namespace MooseUtils
    * Function for stripping name after the file / in parser block
    */
   std::string shortName(const std::string & name);
+
+  /**
+   * Function for string the information before the final / in a parser block
+   */
+  std::string baseName(const std::string & name);
 
   /**
    * This routine is a simple helper function for searching a map by values instead of keys
@@ -230,6 +236,21 @@ namespace MooseUtils
    * @param color The color to apply to the prefix (default CYAN)
    */
   void indentMessage(const std::string & prefix, std::string & message, const char* color = COLOR_CYAN);
+
+  /**
+   * Retrieves the names of all of the files contained within the list of directories passed into the routine.
+   * The names returned will be the paths to the files relative to the current directory.
+   * @param directory_list The list of directories to retrieve files from.
+   */
+  std::list<std::string> getFilesInDirs(const std::list<std::string> & directory_list);
+
+  /**
+   * Returns the most recent checkpoint file given a list of files.
+   * If a suitable file isn't found the empty string is returned
+   * @param checkpoint_files the list of files to analyze
+   */
+  std::string getRecoveryFileBase(const std::list<std::string> & checkpoint_files);
+
 
   /**
    * This function will split the passed in string on a set of delimiters appending the substrings

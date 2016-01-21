@@ -16,11 +16,11 @@
 #define EIGENEXECUTIONERBASE_H
 
 #include "Executioner.h"
-#include "FEProblem.h"
 
 // Forward Declarations
 class EigenExecutionerBase;
 class EigenSystem;
+class FEProblem;
 
 template<>
 InputParameters validParams<EigenExecutionerBase>();
@@ -42,12 +42,15 @@ public:
 
   virtual ~EigenExecutionerBase();
 
-  virtual Problem & problem() { return _problem; }
-
   /**
    * Initialization
    */
   virtual void init();
+
+  /**
+   * The old eigenvalue used by inverse power iterations
+   */
+  const Real & eigenvalueOld();
 
   /**
    * Normalize solution so that |Bx| = k
@@ -132,6 +135,7 @@ protected:
 
   // postprocessor for eigenvalue
   const Real & _source_integral;
+  Real _source_integral_old;
 
   /// Postprocessor for normalization
   const Real & _normalization;

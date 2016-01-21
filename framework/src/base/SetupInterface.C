@@ -14,6 +14,7 @@
 
 #include "SetupInterface.h"
 #include "Conversion.h"
+#include "FEProblem.h"
 
 template<>
 InputParameters validParams<SetupInterface>()
@@ -33,7 +34,8 @@ InputParameters validParams<SetupInterface>()
   return params;
 }
 
-SetupInterface::SetupInterface(const InputParameters & params)
+SetupInterface::SetupInterface(const InputParameters & params) :
+    _current_execute_flag((params.getCheckedPointerParam<FEProblem *>("_fe_problem"))->getCurrentExecuteOnFlag())
 {
   /*
    * While many of the MOOSE systems inherit from this interface, it doesn't make sense for them all to adjust their execution flags.
@@ -42,23 +44,7 @@ SetupInterface::SetupInterface(const InputParameters & params)
    */
   if (params.have_parameter<bool>("check_execute_on") && params.get<bool>("check_execute_on"))
   {
-
-    // Handle deprecated syntax
     MultiMooseEnum flags = params.get<MultiMooseEnum>("execute_on");
-    std::map<std::string, std::string> syntax_conversion;
-    syntax_conversion["residual"] = "linear";
-    syntax_conversion["jacobian"] = "nonlinear";
-    syntax_conversion["timestep"] = "timestep_end";
-
-    for (std::map<std::string, std::string>::const_iterator it = syntax_conversion.begin(); it != syntax_conversion.end(); ++it)
-      if (flags.contains(it->first))
-      {
-        mooseWarning("The 'execute_on' option '" << it->first << "' is deprecated, please replace with '" << it->second << "'.");
-        flags.erase(it->first);
-        flags.push_back(it->second);
-      }
-
-    // Set the execution flags for this object
     _exec_flags = Moose::vectorStringsToEnum<ExecFlagType>(flags);
   }
 
@@ -104,5 +90,5 @@ SetupInterface::execBitFlags() const
 MultiMooseEnum
 SetupInterface::getExecuteOptions()
 {
-  return MultiMooseEnum("initial=0x01 linear=0x02 nonlinear=0x04 timestep_end=0x08 timestep_begin=0x10 custom=0x100 residual=0x200 jacobian=0x400 timestep=0x800", "linear");
+  return MultiMooseEnum("none=0x00 initial=0x01 linear=0x02 nonlinear=0x04 timestep_end=0x08 timestep_begin=0x10 custom=0x100", "linear");
 }

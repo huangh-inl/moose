@@ -7,25 +7,20 @@
 #ifndef MATDIFFUSION_H
 #define MATDIFFUSION_H
 
-#include "Diffusion.h"
-#include "Material.h"
+#include "MatDiffusionBase.h"
 
-//Forward Declarations
-class MatDiffusion;
-
-template<>
-InputParameters validParams<MatDiffusion>();
-
-class MatDiffusion : public Diffusion
+/**
+ * Isotropic diffusion kernel that takes a diffusion coefficient of type
+ * Real. All logic is implemnted in the MatDiffusionBase class
+ * template.
+ */
+class MatDiffusion : public MatDiffusionBase<Real>
 {
 public:
   MatDiffusion(const InputParameters & parameters);
-
-protected:
-  virtual Real computeQpResidual();
-  virtual Real computeQpJacobian();
-
-  const MaterialProperty<Real> & _D;
 };
+
+template<>
+InputParameters validParams<MatDiffusion>();
 
 #endif //MATDIFFUSION_H

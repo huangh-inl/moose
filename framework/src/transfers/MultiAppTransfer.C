@@ -12,14 +12,18 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
+// MOOSE includes
 #include "MultiAppTransfer.h"
-
 #include "Transfer.h"
 #include "MooseTypes.h"
 #include "FEProblem.h"
 #include "DisplacedProblem.h"
+#include "MultiApp.h"
+#include "MooseMesh.h"
 
+// libMesh includes
 #include "libmesh/parallel_algebra.h"
+#include "libmesh/mesh_tools.h"
 
 template<>
 InputParameters validParams<MultiAppTransfer>()
@@ -51,7 +55,7 @@ MultiAppTransfer::MultiAppTransfer(const InputParameters & parameters) :
     /**
      * Here we need to remove the special option that indicates to the user that this object will follow it's associated
      * Multiapp execute_on. This non-standard option is not understood by SetupInterface. In the absence of any execute_on
-     * parameters, FEProblem will populate the execute_on MultiMooseEnum with the values from the associated MultiApp.
+     * parameters, will populate the execute_on MultiMooseEnum with the values from the associated MultiApp (see execFlags).
      */
     Transfer(removeSpecialOption(parameters)),
     _multi_app(_fe_problem.getMultiApp(getParam<MultiAppName>("multi_app"))),
@@ -59,16 +63,27 @@ MultiAppTransfer::MultiAppTransfer(const InputParameters & parameters) :
     _displaced_source_mesh(false),
     _displaced_target_mesh(false)
 {
+  if (execFlags() != _multi_app->execFlags())
+      mooseDoOnce(mooseWarning("MultiAppTransfer execute_on flags do not match associated Multiapp execute_on flags"));
 }
 
 void
 MultiAppTransfer::variableIntegrityCheck(const AuxVariableName & var_name) const
 {
   for (unsigned int i = 0; i < _multi_app->numGlobalApps(); i++)
-    if (_multi_app->hasLocalApp(i) && !find_sys(_multi_app->appProblem(i)->es(), var_name))
+    if (_multi_app->hasLocalApp(i) && !find_sys(_multi_app->appProblem(i).es(), var_name))
       mooseError("Cannot find variable " << var_name << " for " << name() << " Transfer");
 }
 
+
+const std::vector<ExecFlagType> &
+MultiAppTransfer::execFlags() const
+{
+  if (Transfer::execFlags().empty())
+    return _multi_app->execFlags();
+  else
+    return Transfer::execFlags();
+}
 
 void
 MultiAppTransfer::getAppInfo()
@@ -91,25 +106,25 @@ MultiAppTransfer::getAppInfo()
   switch (_direction)
   {
     case TO_MULTIAPP:
-      _from_problems.push_back(_multi_app->problem());
+      _from_problems.push_back(&_multi_app->problem());
       _from_positions.push_back(Point(0., 0., 0.));
       for (unsigned int i_app = 0; i_app < _multi_app->numGlobalApps(); i_app++)
       {
         if (!_multi_app->hasLocalApp(i_app)) continue;
         _local2global_map.push_back(i_app);
-        _to_problems.push_back(_multi_app->appProblem(i_app));
+        _to_problems.push_back(&_multi_app->appProblem(i_app));
         _to_positions.push_back(_multi_app->position(i_app));
       }
       break;
 
     case FROM_MULTIAPP:
-      _to_problems.push_back(_multi_app->problem());
+      _to_problems.push_back(&_multi_app->problem());
       _to_positions.push_back(Point(0., 0., 0.));
       for (unsigned int i_app = 0; i_app < _multi_app->numGlobalApps(); i_app++)
       {
         if (!_multi_app->hasLocalApp(i_app)) continue;
         _local2global_map.push_back(i_app);
-        _from_problems.push_back(_multi_app->appProblem(i_app));
+        _from_problems.push_back(&_multi_app->appProblem(i_app));
         _from_positions.push_back(_multi_app->position(i_app));
       }
       break;

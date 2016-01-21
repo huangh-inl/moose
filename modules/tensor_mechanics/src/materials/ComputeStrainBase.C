@@ -4,7 +4,9 @@
 /*          All contents are licensed under LGPL V2.1           */
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
+
 #include "ComputeStrainBase.h"
+#include "MooseMesh.h"
 
 template<>
 InputParameters validParams<ComputeStrainBase>()
@@ -29,6 +31,7 @@ ComputeStrainBase::ComputeStrainBase(const InputParameters & parameters) :
     _T0(getParam<Real>("temperature_ref")),
     _thermal_expansion_coeff(getParam<Real>("thermal_expansion_coeff")),
     _base_name(isParamValid("base_name") ? getParam<std::string>("base_name") + "_" : "" ),
+    _mechanical_strain(declareProperty<RankTwoTensor>(_base_name + "mechanical_strain")),
     _total_strain(declareProperty<RankTwoTensor>(_base_name + "total_strain")),
     _stateful_displacements(getParam<bool>("stateful_displacements") && _fe_problem.isTransient())
 {
@@ -60,5 +63,6 @@ ComputeStrainBase::ComputeStrainBase(const InputParameters & parameters) :
 void
 ComputeStrainBase::initQpStatefulProperties()
 {
+  _mechanical_strain[_qp].zero();
   _total_strain[_qp].zero();
 }

@@ -15,6 +15,8 @@
 // MOOSE includes
 #include "BoundaryRestrictable.h"
 #include "Material.h"
+#include "MooseMesh.h"
+#include "MooseObject.h"
 
 template<>
 InputParameters validParams<BoundaryRestrictable>()
@@ -42,6 +44,7 @@ BoundaryRestrictable::BoundaryRestrictable(const InputParameters & parameters) :
     _boundary_restricted(false),
     _block_ids(_empty_block_ids),
     _bnd_tid(parameters.isParamValid("_tid") ? parameters.get<THREAD_ID>("_tid") : 0),
+    _bnd_material_data(_bnd_feproblem->getMaterialData(Moose::BOUNDARY_MATERIAL_DATA, _bnd_tid)),
     _current_boundary_id(_bnd_feproblem == NULL ? _invalid_boundary_id : _bnd_feproblem->getCurrentBoundaryID())
 {
   initializeBoundaryRestrictable(parameters);
@@ -56,6 +59,7 @@ BoundaryRestrictable::BoundaryRestrictable(const InputParameters & parameters, c
     _boundary_restricted(false),
     _block_ids(block_ids),
     _bnd_tid(parameters.isParamValid("_tid") ? parameters.get<THREAD_ID>("_tid") : 0),
+    _bnd_material_data(_bnd_feproblem->getMaterialData(Moose::BOUNDARY_MATERIAL_DATA, _bnd_tid)),
     _current_boundary_id(_bnd_feproblem == NULL ? _invalid_boundary_id : _bnd_feproblem->getCurrentBoundaryID())
 {
   initializeBoundaryRestrictable(parameters);
@@ -65,7 +69,7 @@ void
 BoundaryRestrictable::initializeBoundaryRestrictable(const InputParameters & parameters)
 {
   // The name and id of the object
-  const std::string & name = parameters.get<std::string>("name");
+  const std::string & name = parameters.get<std::string>("_object_name");
 
   // If the mesh pointer is not defined, but FEProblem is, get it from there
   if (_bnd_feproblem != NULL && _bnd_mesh == NULL)
@@ -240,7 +244,7 @@ bool
 BoundaryRestrictable::hasBoundaryMaterialPropertyHelper(const std::string & prop_name) const
 {
   // Reference to MaterialWarehouse for testing and retrieving boundary ids
-  MaterialWarehouse & material_warehouse = _bnd_feproblem->getMaterialWarehouse(_bnd_tid);
+  const MooseObjectWarehouse<Material> & warehouse = _bnd_feproblem->getMaterialWarehouse();
 
   // Complete set of BoundaryIDs that this object is defined
   const std::set<BoundaryID> & ids = hasBoundary(Moose::ANY_BOUNDARY_ID) ? meshBoundaryIDs() : boundaryIDs();
@@ -252,10 +256,10 @@ BoundaryRestrictable::hasBoundaryMaterialPropertyHelper(const std::string & prop
     std::set<std::string> declared_props;
 
     // If boundary materials exist, populated the set of properties that were declared
-    if (material_warehouse.hasBoundaryMaterials(*id_it))
+    if (warehouse.hasActiveBoundaryObjects(*id_it))
     {
-      std::vector<Material *> mats = material_warehouse.getBoundaryMaterials(*id_it);
-      for (std::vector<Material *>::iterator mat_it = mats.begin(); mat_it != mats.end(); ++mat_it)
+      const std::vector<MooseSharedPointer<Material> > & mats = warehouse.getActiveBoundaryObjects(*id_it);
+      for (std::vector<MooseSharedPointer<Material> >::const_iterator mat_it = mats.begin(); mat_it != mats.end(); ++mat_it)
       {
         const std::set<std::string> & mat_props = (*mat_it)->getSuppliedItems();
         declared_props.insert(mat_props.begin(), mat_props.end());

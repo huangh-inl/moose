@@ -20,11 +20,17 @@
 #include "SystemBase.h"
 #include "MooseTypes.h"
 #include "MooseMesh.h"
+#include "MooseVariable.h"
+#include "MooseVariableScalar.h"
 
 // libMesh
 #include "libmesh/quadrature_gauss.h"
 #include "libmesh/fe_interface.h"
-
+#include "libmesh/dof_map.h"
+#include "libmesh/coupling_matrix.h"
+#include "libmesh/elem.h"
+#include "libmesh/node.h"
+#include "libmesh/sparse_matrix.h"
 
 Assembly::Assembly(SystemBase & sys, CouplingMatrix * & cm, THREAD_ID tid) :
     _sys(sys),
@@ -1116,6 +1122,14 @@ Assembly::cacheResidual()
 }
 
 void
+Assembly::cacheResidualContribution(dof_id_type dof, Real value, Moose::KernelType type)
+{
+  _cached_residual_values[type].push_back(value);
+  _cached_residual_rows[type].push_back(dof);
+}
+
+
+void
 Assembly::cacheResidualNeighbor()
 {
   const std::vector<MooseVariable *> & vars = _sys.getVariables(_tid);
@@ -1128,6 +1142,18 @@ Assembly::cacheResidualNeighbor()
   }
 }
 
+void
+Assembly::cacheResidualNodes(DenseVector<Number> & res, std::vector<dof_id_type> & dof_index)
+{
+  // Add the residual value and dof_index to cache_residual_values and cached_residual_rows respectively.
+  // This is used by NodalConstraint.C to cache the residual calculated for master and slave node.
+  Moose::KernelType type = Moose::KT_NONTIME;
+  for (unsigned int i = 0; i < dof_index.size(); ++i)
+  {
+    _cached_residual_values[type].push_back(res(i));
+    _cached_residual_rows[type].push_back(dof_index[i]);
+  }
+}
 
 void
 Assembly::addCachedResidual(NumericVector<Number> & residual, Moose::KernelType type)
@@ -1466,21 +1492,49 @@ Assembly::addJacobianOffDiagScalar(SparseMatrix<Number> & jacobian, unsigned int
 }
 
 void
-Assembly::cacheNodalBCJacobianEntry(numeric_index_type i, numeric_index_type j, Real value)
+Assembly::cacheJacobianContribution(numeric_index_type i, numeric_index_type j, Real value)
 {
-  _cached_nodal_bc_rows.push_back(i);
-  _cached_nodal_bc_cols.push_back(j);
-  _cached_nodal_bc_vals.push_back(value);
+  _cached_jacobian_contribution_rows.push_back(i);
+  _cached_jacobian_contribution_cols.push_back(j);
+  _cached_jacobian_contribution_vals.push_back(value);
 }
 
 void
-Assembly::clearCachedNodalBCJacobianEntries()
+Assembly::setCachedJacobianContributions(SparseMatrix<Number> & jacobian)
 {
-  unsigned int orig_size = _cached_nodal_bc_rows.size();
+  // First zero the rows (including the diagonals) to prepare for
+  // setting the cached values.
+  jacobian.zero_rows(_cached_jacobian_contribution_rows, 0.0);
 
-  _cached_nodal_bc_rows.clear();
-  _cached_nodal_bc_cols.clear();
-  _cached_nodal_bc_vals.clear();
+  // TODO: Use SparseMatrix::set_values() for efficiency
+  for (unsigned int i = 0; i < _cached_jacobian_contribution_vals.size(); ++i)
+    jacobian.set(_cached_jacobian_contribution_rows[i],
+                 _cached_jacobian_contribution_cols[i],
+                 _cached_jacobian_contribution_vals[i]);
+
+  clearCachedJacobianContributions();
+}
+
+void
+Assembly::addCachedJacobianContributions(SparseMatrix<Number> & jacobian)
+{
+  // TODO: Use SparseMatrix::add_values() for efficiency
+  for (unsigned int i = 0; i < _cached_jacobian_contribution_vals.size(); ++i)
+    jacobian.add(_cached_jacobian_contribution_rows[i],
+                 _cached_jacobian_contribution_cols[i],
+                 _cached_jacobian_contribution_vals[i]);
+
+  clearCachedJacobianContributions();
+}
+
+void
+Assembly::clearCachedJacobianContributions()
+{
+  unsigned int orig_size = _cached_jacobian_contribution_rows.size();
+
+  _cached_jacobian_contribution_rows.clear();
+  _cached_jacobian_contribution_cols.clear();
+  _cached_jacobian_contribution_vals.clear();
 
   // It's possible (though massively unlikely) that clear() will
   // change the capacity of the vectors, so let's be paranoid and
@@ -1489,21 +1543,7 @@ Assembly::clearCachedNodalBCJacobianEntries()
   // original size that was cached to account for variations in the
   // number of BCs assigned to each thread (for when the Jacobian
   // contributions are computed threaded).
-  _cached_nodal_bc_rows.reserve(1.2*orig_size);
-  _cached_nodal_bc_cols.reserve(1.2*orig_size);
-  _cached_nodal_bc_vals.reserve(1.2*orig_size);
-}
-
-void
-Assembly::setCachedNodalBCJacobianEntries(SparseMatrix<Number> & jacobian)
-{
-  // First zero the rows (including the diagonals) to prepare for
-  // setting the cached values.
-  jacobian.zero_rows(_cached_nodal_bc_rows, 0.0);
-
-  // TODO: Use SparseMatrix::set_values() for efficiency
-  for (unsigned int i = 0; i < _cached_nodal_bc_vals.size(); ++i)
-    jacobian.set(_cached_nodal_bc_rows[i],
-                 _cached_nodal_bc_cols[i],
-                 _cached_nodal_bc_vals[i]);
+  _cached_jacobian_contribution_rows.reserve(1.2*orig_size);
+  _cached_jacobian_contribution_cols.reserve(1.2*orig_size);
+  _cached_jacobian_contribution_vals.reserve(1.2*orig_size);
 }

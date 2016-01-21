@@ -15,6 +15,7 @@
 #ifndef MOOSEOBJECT_H
 #define MOOSEOBJECT_H
 
+// MOOSE includes
 #include "InputParameters.h"
 #include "ConsoleStreamInterface.h"
 
@@ -44,7 +45,7 @@ public:
    * Get the name of the object
    * @return The name of the object
    */
-  const std::string & name() const { return _short_name; }
+  const std::string & name() const { return _name; }
 
   /**
    * Get the parameters of the object
@@ -71,6 +72,12 @@ public:
    */
   MooseApp & getMooseApp() { return _app; }
 
+  /**
+   * Return the enabled status of the object.
+   */
+  bool enabled() { return _enabled; }
+
+
 protected:
 
   /// The MooseApp this object is associated with
@@ -79,11 +86,12 @@ protected:
   /// Parameters of this object, references the InputParameters stored in the InputParametersWarehouse
   const InputParameters & _pars;
 
-  /// The full name of this object
+  /// The name of this object, reference to value stored in InputParameters
   const std::string & _name;
 
-  /// The short name of this object, this is what is returned by the name() method
-  const std::string _short_name;
+  /// Reference to the "enable" InputParaemters, used by Controls for toggling on/off MooseObjects
+  const bool & _enabled;
+
 };
 
 template <typename T>
@@ -92,5 +100,6 @@ MooseObject::getParam(const std::string & name) const
 {
   return InputParameters::getParamHelper(name, _pars, static_cast<T *>(0));
 }
+
 
 #endif /* MOOSEOBJECT_H*/

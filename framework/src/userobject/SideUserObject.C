@@ -15,12 +15,14 @@
 #include "SideUserObject.h"
 #include "SubProblem.h"
 #include "MooseTypes.h"
+#include "Assembly.h"
 
 template<>
 InputParameters validParams<SideUserObject>()
 {
   InputParameters params = validParams<UserObject>();
   params += validParams<BoundaryRestrictable>();
+  params += validParams<MaterialPropertyInterface>();
   return params;
 }
 
@@ -50,4 +52,3 @@ SideUserObject::SideUserObject(const InputParameters & parameters) :
   for (unsigned int i=0; i<coupled_vars.size(); i++)
     addMooseVariableDependency(coupled_vars[i]);
 }
-

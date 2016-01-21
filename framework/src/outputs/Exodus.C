@@ -20,6 +20,9 @@
 #include "ExodusFormatter.h"
 #include "FileMesh.h"
 
+// libMesh includes
+#include "libmesh/exodusII_io.h"
+
 template<>
 InputParameters validParams<Exodus>()
 {
@@ -39,6 +42,9 @@ InputParameters validParams<Exodus>()
   // Add description for the Exodus class
   params.addClassDescription("Object for output data in the Exodus II format");
 
+  // Flag for overwriting at each timestep
+  params.addParam<bool>("overwrite", false, "When true the latest timestep will overwrite the existing file, so only a single timestep exists.");
+
   // Set outputting of the input to be on by default
   params.set<MultiMooseEnum>("execute_input_on") = "initial";
 
@@ -52,7 +58,8 @@ Exodus::Exodus(const InputParameters & parameters) :
     _exodus_num(declareRestartableData<unsigned int>("exodus_num", 0)),
     _recovering(_app.isRecovering()),
     _exodus_mesh_changed(declareRestartableData<bool>("exodus_mesh_changed", true)),
-    _sequence(isParamValid("sequence") ? getParam<bool>("sequence") : _use_displaced ? true : false)
+    _sequence(isParamValid("sequence") ? getParam<bool>("sequence") : _use_displaced ? true : false),
+    _overwrite(getParam<bool>("overwrite"))
 {
 }
 
@@ -143,7 +150,33 @@ Exodus::outputSetup()
     _exodus_io_ptr->use_mesh_dimension_instead_of_spatial_dimension(getParam<bool>("use_problem_dimension"));
   else
   {
-    // Utilize the spatial dimensions
+    // If the spatial_dimension is 1 (this can only happen in recent
+    // versions of libmesh where the meaning of spatial_dimension has
+    // changed), then force the Exodus file to be written with
+    // num_dim==3.
+    //
+    // This works around an issue in Paraview where 1D meshes cannot
+    // not be visualized correctly.  Note: the mesh_dimension() should
+    // get changed back to 1 the next time MeshBase::prepare_for_use()
+    // is called.
+    if (_es_ptr->get_mesh().spatial_dimension() == 1)
+      _exodus_io_ptr->write_as_dimension(3);
+
+    // If the spatial_dimension is 2 (again, only possible in recent
+    // versions of libmesh), then we need to be careful as this mesh
+    // would not have been written with num_dim==2 in the past.
+    //
+    // We *can't* simply write it with num_dim==mesh_dimension,
+    // because mesh_dimension might be 1, and as discussed above, we
+    // don't allow num_dim==1 Exodus files.  Therefore, in this
+    // particular case, we force writing with num_dim==3.  Note: the
+    // humor of writing a mesh of 1D elements which lives in 2D space
+    // as num_dim==3 is not lost on me.
+    if (_es_ptr->get_mesh().spatial_dimension() == 2 && _es_ptr->get_mesh().mesh_dimension() == 1)
+      _exodus_io_ptr->write_as_dimension(3);
+
+    // Utilize the spatial dimension.  This value of this flag is
+    // superseded by the value passed to write_as_dimension(), if any.
     if (_es_ptr->get_mesh().mesh_dimension() != 1)
       _exodus_io_ptr->use_mesh_dimension_instead_of_spatial_dimension(true);
   }
@@ -159,7 +192,9 @@ Exodus::outputNodalVariables()
 
   // Write the data via libMesh::ExodusII_IO
   _exodus_io_ptr->write_timestep(filename(), *_es_ptr, _exodus_num, time() + _app.getGlobalTimeOffset());
-  _exodus_num++;
+
+  if (!_overwrite)
+    _exodus_num++;
 
   // This satisfies the initialization of the ExodusII_IO object
   _exodus_initialized = true;
@@ -311,6 +346,9 @@ Exodus::outputEmptyTimestep()
   // Write a timestep with no variables
   _exodus_io_ptr->set_output_variables(std::vector<std::string>());
   _exodus_io_ptr->write_timestep(filename(), *_es_ptr, _exodus_num, time() + _app.getGlobalTimeOffset());
-  _exodus_num++;
+
+  if (!_overwrite)
+    _exodus_num++;
+
   _exodus_initialized = true;
 }

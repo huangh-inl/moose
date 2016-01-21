@@ -25,8 +25,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-OutputWarehouse::OutputWarehouse() :
+OutputWarehouse::OutputWarehouse(MooseApp & app) :
     Warehouse<Output>(),
+    _app(app),
+    _buffer_action_console_outputs(true),
     _output_exec_flag(EXEC_CUSTOM),
     _force_output(false)
 {
@@ -119,14 +121,6 @@ OutputWarehouse::hasOutput(const std::string & name) const
   return _object_map.find(name) != _object_map.end();
 }
 
-const std::vector<Output *> &
-OutputWarehouse::getOutputs() const
-{
-  mooseDeprecated("OutputWarehouse::getOutputs() is deprecated - use OutputWarehouse::all() instead");
-  return _all_objects;
-}
-
-
 const std::set<OutputName> &
 OutputWarehouse::getOutputNames() const
 {
@@ -185,6 +179,19 @@ OutputWarehouse::mooseConsole()
     // Reset
     _console_buffer.clear();
     _console_buffer.str("");
+  }
+  else
+  {
+    if (!_buffer_action_console_outputs)
+    {
+      // this will cause messages to console before its construction immediately flushed and cleared.
+      std::string message = _console_buffer.str();
+      if (_app.multiAppLevel() > 0)
+        MooseUtils::indentMessage(_app.name(), message);
+      Moose::out << message;
+      _console_buffer.clear();
+      _console_buffer.str("");
+    }
   }
 }
 

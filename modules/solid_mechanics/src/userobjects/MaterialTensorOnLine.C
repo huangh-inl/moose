@@ -4,12 +4,17 @@
 /*          All contents are licensed under LGPL V2.1           */
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
+
 #include "MaterialTensorOnLine.h"
 #include "SymmTensor.h"
 #include "FEProblem.h"
+
 #include <cmath>
 #include <algorithm>
 #include <set>
+
+// libmesh includes
+#include "libmesh/quadrature.h"
 
 template<>
 InputParameters validParams<MaterialTensorOnLine>()
@@ -23,7 +28,7 @@ InputParameters validParams<MaterialTensorOnLine>()
   params.addCoupledVar("element_line_id","Element line ID: if not zero, output stress at integration points");
   params.addRequiredParam<std::string>("filename","Output file name");
   params.addParam<int>("line_id",1,"ID of the line of elements to output stresses on");
-  params.set<MultiMooseEnum>("execute_on") = "timestep";
+  params.set<MultiMooseEnum>("execute_on") = "timestep_end";
 
   return params;
 }

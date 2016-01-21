@@ -14,6 +14,8 @@
 #include "MooseTestApp.h"
 #include "Moose.h"
 #include "Factory.h"
+#include "MooseSyntax.h"
+
 #include "ActionFactory.h"
 #include "AppFactory.h"
 
@@ -173,6 +175,8 @@
 #include "NumSideQPs.h"
 #include "ElementL2Diff.h"
 #include "TestPostprocessor.h"
+#include "ElementSidePP.h"
+#include "RealControlParameterReporter.h"
 
 // Functions
 #include "TimestepSetupFunction.h"
@@ -210,6 +214,7 @@
 #include "AddLotsOfAuxVariablesAction.h"
 #include "ApplyCoupledVariablesTestAction.h"
 #include "AddLotsOfDiffusion.h"
+#include "PrintMaterials.h"
 
 // From MOOSE
 #include "AddVariableAction.h"
@@ -440,6 +445,8 @@ MooseTestApp::registerObjects(Factory & factory)
   registerPostprocessor(NumSideQPs);
   registerPostprocessor(ElementL2Diff);
   registerPostprocessor(TestPostprocessor);
+  registerPostprocessor(ElementSidePP);
+  registerPostprocessor(RealControlParameterReporter);
 
   registerMarker(RandomHitMarker);
   registerMarker(QPointMarker);
@@ -470,6 +477,7 @@ MooseTestApp::associateSyntax(Syntax & syntax, ActionFactory & action_factory)
   registerAction(AddLotsOfDiffusion, "add_kernel");
   registerAction(AddLotsOfDiffusion, "add_bc");
 
+  registerAction(PrintMaterials, "meta_action");
 
   syntax.registerActionSyntax("ConvDiffMetaAction", "ConvectionDiffusion");
   syntax.registerActionSyntax("AddAuxVariableAction", "MoreAuxVariables/*", "add_aux_variable");
@@ -479,4 +487,6 @@ MooseTestApp::associateSyntax(Syntax & syntax, ActionFactory & action_factory)
   syntax.registerActionSyntax("ApplyCoupledVariablesTestAction", "ApplyInputParametersTest");
 
   syntax.registerActionSyntax("AddLotsOfDiffusion", "Testing/LotsOfDiffusion/*");
+
+  syntax.registerActionSyntax("PrintMaterials", "PrintMaterials");
 }

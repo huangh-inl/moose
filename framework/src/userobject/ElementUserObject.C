@@ -15,6 +15,10 @@
 #include "ElementUserObject.h"
 #include "MooseVariable.h"
 #include "SubProblem.h"
+#include "Assembly.h"
+
+// libMesh includes
+#include "libmesh/elem.h"
 
 template<>
 InputParameters validParams<ElementUserObject>()
@@ -22,7 +26,7 @@ InputParameters validParams<ElementUserObject>()
   InputParameters params = validParams<UserObject>();
   params += validParams<BlockRestrictable>();
   params += validParams<RandomInterface>();
-
+  params += validParams<MaterialPropertyInterface>();
   return params;
 }
 
@@ -51,4 +55,3 @@ ElementUserObject::ElementUserObject(const InputParameters & parameters) :
   for (unsigned int i=0; i<coupled_vars.size(); i++)
     addMooseVariableDependency(coupled_vars[i]);
 }
-

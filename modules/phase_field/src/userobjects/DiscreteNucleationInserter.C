@@ -7,6 +7,9 @@
 #include "DiscreteNucleationInserter.h"
 #include "libmesh/parallel_algebra.h"
 
+// libmesh includes
+#include "libmesh/quadrature.h"
+
 template<>
 InputParameters validParams<DiscreteNucleationInserter>()
 {
@@ -28,7 +31,7 @@ DiscreteNucleationInserter::DiscreteNucleationInserter(const InputParameters & p
     _global_nucleus_list(0),
     _local_nucleus_list(0)
 {
-  setRandomResetFrequency(EXEC_TIMESTEP);
+  setRandomResetFrequency(EXEC_TIMESTEP_END);
 
   // debugging code (this will insert the entry into every processors list, but duplicate entries in global should be OK)
   // we also assume that time starts at 0! But hey, this is only for debugging anyways...

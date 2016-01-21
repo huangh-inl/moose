@@ -4,7 +4,11 @@
 /*          All contents are licensed under LGPL V2.1           */
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
+
 #include "ComputeIncrementalSmallStrain.h"
+
+// libmesh includes
+#include "libmesh/quadrature.h"
 
 template<>
 InputParameters validParams<ComputeIncrementalSmallStrain>()
@@ -19,9 +23,10 @@ ComputeIncrementalSmallStrain::ComputeIncrementalSmallStrain(const InputParamete
     ComputeSmallStrain(parameters),
     _strain_rate(declareProperty<RankTwoTensor>(_base_name + "strain_rate")),
     _strain_increment(declareProperty<RankTwoTensor>(_base_name + "strain_increment")),
+    _mechanical_strain_old(declarePropertyOld<RankTwoTensor>("mechanical_strain")),
     _total_strain_old(declarePropertyOld<RankTwoTensor>("total_strain")),
     _rotation_increment(declareProperty<RankTwoTensor>(_base_name + "rotation_increment")),
-    _deformation_gradient(declareProperty<RankTwoTensor>(_base_name + "deformation gradient")),
+    _deformation_gradient(declareProperty<RankTwoTensor>(_base_name + "deformation_gradient")),
     _stress_free_strain_increment(getDefaultMaterialProperty<RankTwoTensor>(_base_name + "stress_free_strain_increment")),
     _T_old(coupledValueOld("temperature"))
 {
@@ -37,6 +42,7 @@ ComputeIncrementalSmallStrain::initQpStatefulProperties()
   _rotation_increment[_qp].zero();
   _rotation_increment[_qp].addIa(1.0); // this remains constant
   _deformation_gradient[_qp].zero();
+  _mechanical_strain_old[_qp] = _mechanical_strain[_qp];
   _total_strain_old[_qp] = _total_strain[_qp];
 }
 
@@ -55,7 +61,9 @@ ComputeIncrementalSmallStrain::computeProperties()
 
     A -= Fbar; // A = grad_disp - grad_disp_old
 
-    _strain_increment[_qp] = 0.5*(A + A.transpose());
+    RankTwoTensor total_strain_increment = 0.5*(A + A.transpose());
+
+    _strain_increment[_qp] = total_strain_increment;
 
     //Remove thermal expansion
     _strain_increment[_qp].addIa(-_thermal_expansion_coeff*( _T[_qp] - _T_old[_qp]));
@@ -64,9 +72,10 @@ ComputeIncrementalSmallStrain::computeProperties()
     _strain_increment[_qp] -= _stress_free_strain_increment[_qp];
 
     // strain rate
-    _strain_rate[_qp] = _strain_increment[_qp]/_t_step;
+    _strain_rate[_qp] = _strain_increment[_qp]/_dt;
 
     //Update strain in intermediate configuration: rotations are not needed
-    _total_strain[_qp] = _total_strain_old[_qp] + _strain_increment[_qp];
+    _mechanical_strain[_qp] = _mechanical_strain_old[_qp] + _strain_increment[_qp];
+    _total_strain[_qp] = _total_strain_old[_qp] + total_strain_increment;
   }
 }

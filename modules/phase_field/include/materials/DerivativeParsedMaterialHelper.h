@@ -26,31 +26,35 @@ public:
   DerivativeParsedMaterialHelper(const InputParameters & parameters,
                                  VariableNameMappingMode map_mode = USE_PARAM_NAMES);
 
-  virtual ~DerivativeParsedMaterialHelper();
-
 protected:
   virtual void computeProperties();
 
   virtual void functionsPostParse();
-
   void assembleDerivatives();
+  MatPropDescriptorList::iterator findMatPropDerivative(const FunctionMaterialPropertyDescriptor &);
 
   struct QueueItem;
-  typedef std::pair<MaterialProperty<Real> *,ADFunction *> Derivative;
+  typedef std::pair<MaterialProperty<Real> *, ADFunctionPtr> Derivative;
 
   /// The requested derivatives of the free energy
   std::vector<Derivative> _derivatives;
+
+  /// variable base name for the dynamically material property derivatives
+  const std::string _dmatvar_base;
+
+  /// next available variable number for automatically created material property derivative variables
+  unsigned int _dmatvar_index;
 
   /// maximum derivative order
   unsigned int _derivative_order;
 };
 
 struct DerivativeParsedMaterialHelper::QueueItem {
-  QueueItem() : _F(NULL), _dargs(0) {}
-  QueueItem(ADFunction * F) : _F(F), _dargs(0) {}
+  QueueItem() : _dargs(0) {}
+  QueueItem(ADFunctionPtr & F) : _F(F), _dargs(0) {}
   QueueItem(const QueueItem & rhs) : _F(rhs._F), _dargs(rhs._dargs) {}
 
-  ADFunction * _F;
+  ADFunctionPtr _F;
   std::vector<unsigned int> _dargs;
 };
 

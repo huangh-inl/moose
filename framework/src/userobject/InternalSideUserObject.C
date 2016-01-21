@@ -13,14 +13,14 @@
 /****************************************************************/
 
 #include "InternalSideUserObject.h"
+#include "Assembly.h"
 
 template<>
 InputParameters validParams<InternalSideUserObject>()
 {
   InputParameters params = validParams<UserObject>();
   params += validParams<BlockRestrictable>();
-  params.addPrivateParam<bool>("use_bnd_material", true);
-  params.addPrivateParam<bool>("use_neighbor_material", true);
+  params += validParams<TwoMaterialPropertyInterface>();
   return params;
 }
 
@@ -56,4 +56,3 @@ InternalSideUserObject::InternalSideUserObject(const InputParameters & parameter
 InternalSideUserObject::~InternalSideUserObject()
 {
 }
-

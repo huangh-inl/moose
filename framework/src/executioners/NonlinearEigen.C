@@ -58,7 +58,7 @@ NonlinearEigen::init()
     _problem.advanceState();
 
     // free power iterations
-    _console << std::endl << " Free power iteration starts"  << std::endl;
+    _console << " Free power iteration starts"  << std::endl;
 
     Real initial_res;
     inversePowerIteration(_free_iter, _free_iter, _pfactor, false,
@@ -66,10 +66,9 @@ NonlinearEigen::init()
                           "", std::numeric_limits<Real>::max(),
                           _eigenvalue, initial_res);
 
-    _problem.computeUserObjects(EXEC_TIMESTEP_END, UserObjectWarehouse::PRE_AUX);
+
     _problem.onTimestepEnd();
-    _problem.computeAuxiliaryKernels(EXEC_TIMESTEP_END);
-    _problem.computeUserObjects(EXEC_TIMESTEP_END, UserObjectWarehouse::POST_AUX);
+    _problem.execute(EXEC_TIMESTEP_END);
 
     if (_output_after_pi)
     {
@@ -86,6 +85,9 @@ NonlinearEigen::init()
 void
 NonlinearEigen::execute()
 {
+  if (_app.isRecovering())
+    return;
+
   preExecute();
 
   takeStep();
@@ -98,21 +100,19 @@ NonlinearEigen::takeStep()
 {
   _console << " Nonlinear iteration starts"  << std::endl;
 
-  // nonlinear solve
-  _problem.computeUserObjects(EXEC_TIMESTEP_BEGIN, UserObjectWarehouse::PRE_AUX);
   preSolve();
   _problem.timestepSetup();
   _problem.advanceState();
-  _problem.computeUserObjects(EXEC_TIMESTEP_BEGIN, UserObjectWarehouse::POST_AUX);
+  _problem.execute(EXEC_TIMESTEP_BEGIN);
 
   nonlinearSolve(_rel_tol, _abs_tol, _pfactor, _eigenvalue);
-
   postSolve();
-  printEigenvalue();
 
-  _problem.computeUserObjects(EXEC_TIMESTEP_END, UserObjectWarehouse::PRE_AUX);
-  _problem.onTimestepEnd();
-  _problem.computeAuxiliaryKernels(EXEC_TIMESTEP_END);
-  _problem.computeUserObjects(EXEC_TIMESTEP_END, UserObjectWarehouse::POST_AUX);
+  if (lastSolveConverged())
+  {
+    printEigenvalue();
+
+    _problem.onTimestepEnd();
+    _problem.execute(EXEC_TIMESTEP_END);
+  }
 }
-

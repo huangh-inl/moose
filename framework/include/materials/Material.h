@@ -16,37 +16,31 @@
 #define MATERIAL_H
 
 #include "MooseObject.h"
+#include "BlockRestrictable.h"
+#include "BoundaryRestrictable.h"
 #include "SetupInterface.h"
 #include "Coupleable.h"
-#include "ScalarCoupleable.h"
 #include "MooseVariableDependencyInterface.h"
+#include "ScalarCoupleable.h"
 #include "FunctionInterface.h"
 #include "UserObjectInterface.h"
 #include "TransientInterface.h"
-#include "PostprocessorInterface.h"
-#include "MaterialProperty.h"
 #include "MaterialPropertyInterface.h"
-#include "MaterialData.h"
-#include "ParallelUniqueId.h"
-#include "Problem.h"
-#include "SubProblem.h"
+#include "PostprocessorInterface.h"
 #include "DependencyResolverInterface.h"
-#include "Function.h"
-#include "BlockRestrictable.h"
-#include "BoundaryRestrictable.h"
 #include "Restartable.h"
 #include "ZeroInterface.h"
 #include "MeshChangedInterface.h"
 #include "OutputInterface.h"
 #include "RandomInterface.h"
 
-// libMesh includes
-#include "libmesh/quadrature_gauss.h"
-#include "libmesh/elem.h"
+#include "MaterialProperty.h"
 
 // forward declarations
 class Material;
 class MooseMesh;
+class MaterialData;
+class SubProblem;
 
 /**
  * Holds a data structure used to compute material properties at a Quadrature point
@@ -86,9 +80,9 @@ class Material :
   public RandomInterface
 {
 public:
-  Material(const InputParameters & parameters);
 
-  virtual ~Material();
+
+  Material(const InputParameters & parameters);
 
   /**
    * All materials must override this virtual.
@@ -139,6 +133,13 @@ public:
   ///@}
 
   /**
+   * Return a material property that is initialized to zero by default and does
+   * not need to (but can) be declared by another material.
+   */
+  template<typename T>
+  const MaterialProperty<T> & getZeroMaterialProperty(const std::string & prop_name);
+
+  /**
    * Return a set of properties accessed with getMaterialProperty
    * @return A reference to the set of properties with calls to getMaterialProperty
    */
@@ -153,6 +154,12 @@ public:
   virtual
   const std::set<std::string> &
   getSuppliedItems() { return _supplied_props; }
+
+  /**
+   * Transform a zero prop into a requested prop if a material later supplies it.
+   * This ensures proper dependency ordering.
+   */
+  void setZeroPropAsRequested(const std::string & prop_name);
 
   void checkStatefulSanity() const;
 
@@ -175,15 +182,20 @@ public:
    */
   std::set<OutputName> getOutputs();
 
+  /**
+   * Returns true of the MaterialData type is not associated with volume data
+   */
+  bool isBoundaryMaterial() { return _bnd; }
+
 protected:
   SubProblem & _subproblem;
 
   FEProblem & _fe_problem;
   THREAD_ID _tid;
   Assembly & _assembly;
+
   bool _bnd;
   bool _neighbor;
-  MaterialData & _material_data;
 
   unsigned int _qp;
 
@@ -209,6 +221,9 @@ protected:
 
   /// Set of properties declared
   std::set<std::string> _supplied_props;
+
+  /// Set of properties returned as zero properties
+  std::set<std::string> _zero_props;
 
   enum QP_Data_Type {
     CURR,
@@ -308,7 +323,7 @@ Material::getMaterialPropertyByName(const std::string & prop_name)
   _requested_props.insert(prop_name);
   registerPropName(prop_name, true, Material::CURRENT);
   _fe_problem.markMatPropRequested(prop_name);
-  return _material_data.getProperty<T>(prop_name);
+  return _material_data->getProperty<T>(prop_name);
 }
 
 template<typename T>
@@ -318,7 +333,7 @@ Material::getMaterialPropertyOldByName(const std::string & prop_name)
   _requested_props.insert(prop_name);
   registerPropName(prop_name, true, Material::OLD);
   _fe_problem.markMatPropRequested(prop_name);
-  return _material_data.getPropertyOld<T>(prop_name);
+  return _material_data->getPropertyOld<T>(prop_name);
 }
 
 template<typename T>
@@ -328,7 +343,7 @@ Material::getMaterialPropertyOlderByName(const std::string & prop_name)
   _requested_props.insert(prop_name);
   registerPropName(prop_name, true, Material::OLDER);
   _fe_problem.markMatPropRequested(prop_name);
-  return _material_data.getPropertyOlder<T>(prop_name);
+  return _material_data->getPropertyOlder<T>(prop_name);
 }
 
 
@@ -337,7 +352,7 @@ MaterialProperty<T> &
 Material::declareProperty(const std::string & prop_name)
 {
   registerPropName(prop_name, false, Material::CURRENT);
-  return _material_data.declareProperty<T>(prop_name);
+  return _material_data->declareProperty<T>(prop_name);
 }
 
 template<typename T>
@@ -345,7 +360,7 @@ MaterialProperty<T> &
 Material::declarePropertyOld(const std::string & prop_name)
 {
   registerPropName(prop_name, false, Material::OLD);
-  return _material_data.declarePropertyOld<T>(prop_name);
+  return _material_data->declarePropertyOld<T>(prop_name);
 }
 
 template<typename T>
@@ -353,8 +368,28 @@ MaterialProperty<T> &
 Material::declarePropertyOlder(const std::string & prop_name)
 {
   registerPropName(prop_name, false, Material::OLDER);
-  return _material_data.declarePropertyOlder<T>(prop_name);
+  return _material_data->declarePropertyOlder<T>(prop_name);
 }
 
+template<typename T>
+const MaterialProperty<T> &
+Material::getZeroMaterialProperty(const std::string & prop_name)
+{
+  // declare this material property and insert in _zero_props...
+  _zero_props.insert(prop_name);
+  // ...but NOT in _supplied_props (hence the is_get = true)
+  registerPropName(prop_name, true, Material::CURRENT);
+  MaterialProperty<T> & preload_with_zero = _material_data->declareProperty<T>(prop_name);
+
+  // resize to accomodate maximum number of qpoints
+  unsigned int nqp = _mi_feproblem.getMaxQps();
+  preload_with_zero.resize(nqp);
+
+  // set values for all qpoints to zero
+  for (unsigned int qp = 0; qp < nqp; ++qp)
+    mooseSetToZero<T>(preload_with_zero[qp]);
+
+  return preload_with_zero;
+}
 
 #endif //MATERIAL_H

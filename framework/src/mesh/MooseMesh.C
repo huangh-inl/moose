@@ -46,6 +46,10 @@
 #include "libmesh/hilbert_sfc_partitioner.h"
 #include "libmesh/morton_sfc_partitioner.h"
 #include "libmesh/edge_edge2.h"
+#include "libmesh/mesh_refinement.h"
+#include "libmesh/quadrature.h"
+#include "libmesh/boundary_info.h"
+#include "libmesh/periodic_boundaries.h"
 
 static const int GRAIN_SIZE = 1;     // the grain_size does not have much influence on our execution speed
 
@@ -104,6 +108,7 @@ MooseMesh::MooseMesh(const InputParameters & parameters) :
     _is_changed(false),
     _is_nemesis(getParam<bool>("nemesis")),
     _is_prepared(false),
+    _needs_prepare_for_use(false),
     _refined_elements(NULL),
     _coarsened_elements(NULL),
     _active_local_elem_range(NULL),
@@ -113,6 +118,7 @@ MooseMesh::MooseMesh(const InputParameters & parameters) :
     _bnd_node_range(NULL),
     _bnd_elem_range(NULL),
     _node_to_elem_map_built(false),
+    _node_to_active_semilocal_elem_map_built(false),
     _patch_size(40),
     _patch_update_strategy(getParam<MooseEnum>("patch_update_strategy")),
     _regular_orthogonal_mesh(false),
@@ -167,11 +173,11 @@ MooseMesh::MooseMesh(const MooseMesh & other_mesh) :
     _mesh(other_mesh.getMesh().clone().release()),
     _partitioner_name(other_mesh._partitioner_name),
     _partitioner_overridden(other_mesh._partitioner_overridden),
-    _custom_partitioner(other_mesh.getCustomPartitioner()),
     _uniform_refine_level(other_mesh.uniformRefineLevel()),
     _is_changed(false),
     _is_nemesis(false),
     _is_prepared(false),
+    _needs_prepare_for_use(false),
     _refined_elements(NULL),
     _coarsened_elements(NULL),
     _active_local_elem_range(NULL),
@@ -266,14 +272,14 @@ MooseMesh::prepare(bool force)
   {
     // Call prepare_for_use() and allow renumbering
     getMesh().allow_renumbering(true);
-    if (force)
+    if (force || _needs_prepare_for_use)
       getMesh().prepare_for_use();
   }
   else
   {
     // Call prepare_for_use() and DO NOT allow renumbering
     getMesh().allow_renumbering(false);
-    if (force)
+    if (force || _needs_prepare_for_use)
       getMesh().prepare_for_use();
   }
 
@@ -319,6 +325,7 @@ MooseMesh::prepare(bool force)
 
   // Prepared has been called
   _is_prepared = true;
+  _needs_prepare_for_use = false;
 }
 
 void
@@ -330,6 +337,8 @@ MooseMesh::update()
   //Update the node to elem map
   _node_to_elem_map.clear();
   _node_to_elem_map_built = false;
+  _node_to_active_semilocal_elem_map.clear();
+  _node_to_active_semilocal_elem_map_built = false;
 
   buildNodeList();
   buildBndElemList();
@@ -604,6 +613,28 @@ MooseMesh::nodeToElemMap()
   return _node_to_elem_map;
 }
 
+std::map<dof_id_type, std::vector<dof_id_type> > &
+MooseMesh::nodeToActiveSemilocalElemMap()
+{
+  if (!_node_to_active_semilocal_elem_map_built) // Guard the creation with a double checked lock
+  {
+    Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);
+    if (!_node_to_active_semilocal_elem_map_built)
+    {
+      MeshBase::const_element_iterator       el  = getMesh().semilocal_elements_begin();
+      const MeshBase::const_element_iterator end = getMesh().semilocal_elements_end();
+
+      for (; el != end; ++el)
+        if ((*el)->active())
+          for (unsigned int n=0; n<(*el)->n_nodes(); n++)
+            _node_to_active_semilocal_elem_map[(*el)->node(n)].push_back((*el)->id());
+
+      _node_to_active_semilocal_elem_map_built = true; // MUST be set at the end for double-checked locking to work!
+    }
+  }
+
+  return _node_to_active_semilocal_elem_map;
+}
 
 
 ConstElemRange *
@@ -693,7 +724,7 @@ MooseMesh::cacheInfo()
 
     for (unsigned int side=0; side<elem->n_sides(); side++)
     {
-      std::vector<BoundaryID> boundaryids = boundaryIDs(elem, side);
+      std::vector<BoundaryID> boundaryids = getBoundaryIDs(elem, side);
 
       for (unsigned int i=0; i<boundaryids.size(); i++)
         _subdomain_boundary_ids[subdomain_id].insert(boundaryids[i]);
@@ -826,6 +857,8 @@ MooseMesh::addQuadratureNode(const Elem * elem, const unsigned short int side, c
     _elem_to_side_to_qp_to_quadrature_nodes[elem->id()][side][qp] = qnode;
 
     _node_to_elem_map[new_id].push_back(elem->id());
+    if (elem->active())
+      _node_to_active_semilocal_elem_map[new_id].push_back(elem->id());
   }
   else
     qnode = _elem_to_side_to_qp_to_quadrature_nodes[elem->id()][side][qp];
@@ -1010,6 +1043,9 @@ MooseMesh::buildPeriodicNodeMap(std::multimap<dof_id_type, dof_id_type> & period
   // A typedef makes the code below easier to read...
   typedef std::multimap<dof_id_type, dof_id_type>::iterator IterType;
 
+  // Container to catch IDs passed back from the BoundaryInfo object
+  std::vector<boundary_id_type> bc_ids;
+
   for (; it != it_end; ++it)
   {
     const Elem *elem = *it;
@@ -1018,7 +1054,7 @@ MooseMesh::buildPeriodicNodeMap(std::multimap<dof_id_type, dof_id_type> & period
       if (elem->neighbor(s))
         continue;
 
-      const std::vector<boundary_id_type>& bc_ids = boundary_info.boundary_ids (elem, s);
+      boundary_info.boundary_ids (elem, s, bc_ids);
       for (std::vector<boundary_id_type>::const_iterator id_it = bc_ids.begin(); id_it!=bc_ids.end(); ++id_it)
       {
         const boundary_id_type boundary_id = *id_it;
@@ -1181,6 +1217,10 @@ MooseMesh::detectPairedSidesets()
   boundary_info.build_node_list_from_side_list();
   unsigned int dim = getMesh().mesh_dimension();
   unsigned int z_dim = dim == 3 ? 2 : 1;  // Determine how many z loops there are, we always need to loop at least once!
+
+  // Container to catch IDs passed back from the BoundaryInfo object
+  std::vector<BoundaryID> bounds_ids;
+
   for (unsigned int curr_dim=0; curr_dim < dim; ++curr_dim)
   {
     std::pair<BoundaryID, BoundaryID> paired_boundary;
@@ -1190,8 +1230,7 @@ MooseMesh::detectPairedSidesets()
       for (unsigned int j=0; j<2; ++j)
         for (unsigned int k=0; k<z_dim; ++k)
         {
-          std::vector<BoundaryID> bounds_ids =
-            boundary_info.boundary_ids(_extreme_nodes[i*strides[curr_dim][0] + j*strides[curr_dim][1] + k*strides[curr_dim][2]]);
+          boundary_info.boundary_ids(_extreme_nodes[i*strides[curr_dim][0] + j*strides[curr_dim][1] + k*strides[curr_dim][2]], bounds_ids);
 
           for (unsigned int l=0; l<bounds_ids.size(); ++l)
             ++boundary_counts[bounds_ids[l]];
@@ -1661,6 +1700,9 @@ MooseMesh::changeBoundaryId(const boundary_id_type old_id, const boundary_id_typ
   // Get a reference to our BoundaryInfo object, we will use it several times below...
   BoundaryInfo & boundary_info = getMesh().get_boundary_info();
 
+  // Container to catch ids passed back from BoundaryInfo
+  std::vector<boundary_id_type> old_ids;
+
   // Only level-0 elements store BCs.  Loop over them.
   MeshBase::element_iterator           el = getMesh().level_elements_begin(0);
   const MeshBase::element_iterator end_el = getMesh().level_elements_end(0);
@@ -1670,7 +1712,7 @@ MooseMesh::changeBoundaryId(const boundary_id_type old_id, const boundary_id_typ
     unsigned int n_sides = elem->n_sides();
     for (unsigned int s=0; s != n_sides; ++s)
     {
-      const std::vector<boundary_id_type>& old_ids = boundary_info.boundary_ids(elem, s);
+      boundary_info.boundary_ids(elem, s, old_ids);
       if (std::find(old_ids.begin(), old_ids.end(), old_id) != old_ids.end())
       {
         std::vector<boundary_id_type> new_ids(old_ids);
@@ -1685,6 +1727,12 @@ MooseMesh::changeBoundaryId(const boundary_id_type old_id, const boundary_id_typ
       }
     }
   }
+
+  // Remove any remaining references to the old ID from the
+  // BoundaryInfo object.  This prevents things like empty sidesets
+  // from showing up when printing information, etc.
+  if (delete_prev)
+    boundary_info.remove_id(old_id);
 }
 
 const RealVectorValue &
@@ -1704,11 +1752,11 @@ MooseMesh::init()
   {
     // Check of partitioner is supplied (not allowed if custom partitioner is used)
     if (!parameters().isParamSetByAddParam("partitioner"))
-      mooseError("If partitioner block is provded, partitioner keyword cannot be used!");
+      mooseError("If partitioner block is provided, partitioner keyword cannot be used!");
     // Set custom partitioner
-    if (!_custom_partitioner)
-      mooseError("If using partitioner type custom you must explicitly provide a partitioner in your input file!");
-    getMesh().partitioner().reset(_custom_partitioner);
+    if (!_custom_partitioner.get())
+      mooseError("Custom partitioner requested but not set!");
+    getMesh().partitioner().reset(_custom_partitioner.release());
   }
   else
   {
@@ -1773,9 +1821,11 @@ MooseMesh::dimension() const
 }
 
 std::vector<BoundaryID>
-MooseMesh::boundaryIDs(const Elem *const elem, const unsigned short int side) const
+MooseMesh::getBoundaryIDs(const Elem *const elem, const unsigned short int side) const
 {
-  return getMesh().get_boundary_info().boundary_ids(elem, side);
+  std::vector<BoundaryID> ids;
+  getMesh().get_boundary_info().boundary_ids(elem, side, ids);
+  return ids;
 }
 
 const std::set<BoundaryID> &
@@ -1874,6 +1924,12 @@ MooseMesh::prepared(bool state)
   _is_prepared = state;
 }
 
+void
+MooseMesh::needsPrepareForUse()
+{
+  _needs_prepare_for_use = true;
+}
+
 const std::set<SubdomainID> &
 MooseMesh::meshSubdomains() const
 {
@@ -1948,7 +2004,7 @@ namespace // Anonymous namespace for helper
   {
     extra_ghost_elem_inserter(ParallelMesh& m) : mesh(m) {}
 
-    void operator=(Elem* e) { mesh.add_extra_ghost_elem(e); }
+    void operator=(const Elem* e) { mesh.add_extra_ghost_elem(const_cast<Elem *>(e)); }
 
     void operator=(Node* n) { mesh.add_node(n); }
 
@@ -2051,6 +2107,23 @@ const MooseEnum &
 MooseMesh::getPatchUpdateStrategy()
 {
   return _patch_update_strategy;
+}
+
+MeshTools::BoundingBox
+MooseMesh::getInflatedProcessorBoundingBox(Real inflation_multiplier) const
+{
+  // Grab a bounding box to speed things up
+  MeshTools::BoundingBox bbox = MeshTools::processor_bounding_box(getMesh(), processor_id());
+
+  // Inflate the bbox just a bit to deal with roundoff
+  // Adding 1% of the diagonal size in each direction on each end
+  Real inflation_amount = inflation_multiplier * (bbox.max() - bbox.min()).size();
+  Point inflation(inflation_amount, inflation_amount, inflation_amount);
+
+  bbox.first -= inflation; // min
+  bbox.second += inflation; // max
+
+  return bbox;
 }
 
 MooseMesh::operator libMesh::MeshBase & ()
@@ -2182,17 +2255,10 @@ MooseMesh::getMortarInterface(BoundaryID master, BoundaryID slave)
     mooseError("Requesting non-existing mortar interface (master = " << master << ", slave = " << slave << ").");
 }
 
-Partitioner *
-MooseMesh::getCustomPartitioner() const
-{
-  return _custom_partitioner;
-}
-
-
 void
-MooseMesh::setCustomPartitioner(Partitioner * custom_partitioner)
+MooseMesh::setCustomPartitioner(Partitioner * partitioner)
 {
-  _custom_partitioner = custom_partitioner;
+  _custom_partitioner = partitioner->clone();
 }
 
 bool

@@ -8,6 +8,9 @@
 
 #include "FiniteStrainMaterial.h"
 
+// libmesh includes
+#include "libmesh/quadrature.h"
+
 template<>
 InputParameters validParams<FiniteStrainMaterial>()
 {
@@ -24,7 +27,7 @@ FiniteStrainMaterial::FiniteStrainMaterial(const InputParameters & parameters) :
     _elastic_strain_old(declarePropertyOld<RankTwoTensor>("elastic_strain")),
     _stress_old(declarePropertyOld<RankTwoTensor>("stress")),
     _rotation_increment(declareProperty<RankTwoTensor>("rotation_increment")),
-    _deformation_gradient(declareProperty<RankTwoTensor>("deformation gradient"))
+    _deformation_gradient(declareProperty<RankTwoTensor>("deformation_gradient"))
 {
 }
 
@@ -159,4 +162,3 @@ FiniteStrainMaterial::computeQpStrain(const RankTwoTensor & Fhat)
   R_incr(2,1) -= C3*a[0];
   _rotation_increment[_qp] = R_incr.transpose();
 }
-

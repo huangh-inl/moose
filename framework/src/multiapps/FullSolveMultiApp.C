@@ -11,9 +11,10 @@
 /*                                                              */
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
-#include "FullSolveMultiApp.h"
 
+#include "FullSolveMultiApp.h"
 #include "LayeredSideFluxAverage.h"
+#include "Executioner.h"
 
 // libMesh
 #include "libmesh/mesh_tools.h"
@@ -77,18 +78,19 @@ FullSolveMultiApp::solveStep(Real /*dt*/, Real /*target_time*/, bool auto_advanc
   if (_solved)
     return true;
 
-  _console << "Fully Solving MultiApp " << name() << std::endl;
-
   MPI_Comm swapped = Moose::swapLibMeshComm(_my_comm);
 
   int rank;
   int ierr;
   ierr = MPI_Comm_rank(_orig_comm, &rank); mooseCheckMPIErr(ierr);
 
+  bool last_solve_converged = true;
   for (unsigned int i=0; i<_my_num_apps; i++)
   {
     Executioner * ex = _executioners[i];
     ex->execute();
+    if (!ex->lastSolveConverged())
+      last_solve_converged = false;
   }
 
   // Swap back
@@ -96,9 +98,6 @@ FullSolveMultiApp::solveStep(Real /*dt*/, Real /*target_time*/, bool auto_advanc
 
   _solved = true;
 
-  _console << "Finished Solving MultiApp " << name() << std::endl;
-
-  // TODO: Do soemthing better than this
-  return true;
+  return last_solve_converged;
 }
 

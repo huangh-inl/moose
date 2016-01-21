@@ -18,19 +18,25 @@
 #include "ParallelUniqueId.h"
 #include "Problem.h"
 #include "DiracKernelInfo.h"
-#include "Assembly.h"
 #include "GeometricSearchData.h"
-
-// libMesh include
-#include "libmesh/equation_systems.h"
-#include "libmesh/transient_system.h"
-#include "libmesh/nonlinear_implicit_system.h"
-#include "libmesh/numeric_vector.h"
-#include "libmesh/sparse_matrix.h"
+#include "MooseVariableBase.h" // VariableValue
 
 class MooseMesh;
 class SubProblem;
 class Factory;
+class Assembly;
+class MooseVariable;
+class MooseVariableScalar;
+class RestartableDataValue;
+
+// libMesh forward declarations
+namespace libMesh
+{
+class EquationSystems;
+class DofMap;
+template <typename T> class SparseMatrix;
+template <typename T> class NumericVector;
+}
 
 template<>
 InputParameters validParams<SubProblem>();
@@ -146,6 +152,7 @@ public:
   virtual void reinitNode(const Node * node, THREAD_ID tid) = 0;
   virtual void reinitNodeFace(const Node * node, BoundaryID bnd_id, THREAD_ID tid) = 0;
   virtual void reinitNodes(const std::vector<dof_id_type> & nodes, THREAD_ID tid) = 0;
+  virtual void reinitNodesNeighbor(const std::vector<dof_id_type> & nodes, THREAD_ID tid) = 0;
   virtual void reinitNeighbor(const Elem * elem, unsigned int side, THREAD_ID tid) = 0;
   virtual void reinitNeighborPhys(const Elem * neighbor, unsigned int neighbor_side, const std::vector<Point> & physical_points, THREAD_ID tid) = 0;
   virtual void reinitNodeNeighbor(const Node * node, THREAD_ID tid) = 0;
@@ -287,16 +294,6 @@ public:
    * @param tid The thread id of the object.  Use 0 if the object is not threaded.
    */
   virtual void registerRestartableData(std::string name, RestartableDataValue * data, THREAD_ID tid);
-
-public:
-  /**
-   * Convenience zeros
-   */
-  std::vector<Real> _real_zero;
-  std::vector<VariableValue> _zero;
-  std::vector<VariableGradient> _grad_zero;
-  std::vector<VariableSecond> _second_zero;
-  std::vector<VariablePhiSecond> _second_phi_zero;
 
 protected:
   /// The Factory for building objects

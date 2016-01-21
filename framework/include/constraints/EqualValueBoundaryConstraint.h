@@ -40,7 +40,13 @@ protected:
    */
   virtual Real computeQpJacobian(Moose::ConstraintJacobianType type);
 
-  short _slave_boundary_id;
+  // Holds the master node id
+  unsigned int _master_node_id;
+  // Holds the list of slave node ids
+  std::vector<unsigned int> _slave_node_ids;
+  // Holds the slave node set or side set
+  BoundaryName _slave_node_set_id;
+  // Penalty if constraint is not satisfied
   Real _penalty;
 };
 

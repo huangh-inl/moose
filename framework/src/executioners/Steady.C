@@ -12,10 +12,14 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
+// MOOSE includes
 #include "Steady.h"
 #include "FEProblem.h"
 #include "Factory.h"
 #include "MooseApp.h"
+#include "NonlinearSystem.h"
+
+// libMesh includes
 #include "libmesh/equation_systems.h"
 
 template<>
@@ -27,7 +31,7 @@ InputParameters validParams<Steady>()
 
 Steady::Steady(const InputParameters & parameters) :
     Executioner(parameters),
-    _problem(*parameters.getCheckedPointerParam<FEProblem *>("_fe_problem", "This might happen if you don't have a mesh")),
+    _problem(_fe_problem),
     _time_step(_problem.timeStep()),
     _time(_problem.time())
 {
@@ -45,12 +49,6 @@ Steady::Steady(const InputParameters & parameters) :
 
 Steady::~Steady()
 {
-}
-
-Problem &
-Steady::problem()
-{
-  return _problem;
 }
 
 void
@@ -91,25 +89,26 @@ Steady::execute()
   for (unsigned int r_step=0; r_step<=steps; r_step++)
   {
 #endif //LIBMESH_ENABLE_AMR
-    _problem.computeUserObjects(EXEC_TIMESTEP_BEGIN, UserObjectWarehouse::PRE_AUX);
     preSolve();
     _problem.timestepSetup();
-    _problem.computeAuxiliaryKernels(EXEC_TIMESTEP_BEGIN);
-    _problem.computeUserObjects(EXEC_TIMESTEP_BEGIN, UserObjectWarehouse::POST_AUX);
+    _problem.execute(EXEC_TIMESTEP_BEGIN);
+    _problem.outputStep(EXEC_TIMESTEP_BEGIN);
+
+    // Update warehouse active objects
+    _problem.updateActiveObjects();
+
     _problem.solve();
     postSolve();
 
-    if (!_problem.converged())
+    if (!lastSolveConverged())
     {
       _console << "Aborting as solve did not converge\n";
       break;
     }
 
-    _problem.computeUserObjects(EXEC_TIMESTEP_END, UserObjectWarehouse::PRE_AUX);
     _problem.onTimestepEnd();
+    _problem.execute(EXEC_TIMESTEP_END);
 
-    _problem.computeAuxiliaryKernels(EXEC_TIMESTEP_END);
-    _problem.computeUserObjects(EXEC_TIMESTEP_END, UserObjectWarehouse::POST_AUX);
     _problem.computeIndicatorsAndMarkers();
 
     _problem.outputStep(EXEC_TIMESTEP_END);
@@ -135,4 +134,3 @@ Steady::checkIntegrity()
   if (_problem.getNonlinearSystem().containsTimeKernel())
     mooseError("You have specified time kernels in your steady state simulation");
 }
-

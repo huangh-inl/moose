@@ -15,21 +15,13 @@
 #ifndef POINTSAMPLERBASE_H
 #define POINTSAMPLERBASE_H
 
+// MOOSE includes
 #include "GeneralVectorPostprocessor.h"
-#include "SamplerBase.h"
 #include "CoupleableMooseVariableDependencyIntermediateInterface.h"
+#include "SamplerBase.h"
 
-//Forward Declarations
+// Forward Declarations
 class PointSamplerBase;
-
-// libMesh Forward Declarations
-namespace libMesh
-{
-  namespace MeshTools
-  {
-    class BoundingBox;
-  }
-}
 
 template<>
 InputParameters validParams<PointSamplerBase>();
@@ -59,11 +51,6 @@ protected:
    * @return The Elem containing the point or NULL if this processor doesn't contain an element that contains this point.
    */
   const Elem * getLocalElemContainingPoint(const Point & p, unsigned int id);
-
-  /**
-   * Gets a processor_bounding_box... and inflates it a bit to handle edge cases
-   */
-  MeshTools::BoundingBox getInflatedProcessorBoundingBox();
 
   /// The Mesh we're using
   MooseMesh & _mesh;

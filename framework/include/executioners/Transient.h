@@ -16,11 +16,6 @@
 #define TRANSIENT_H
 
 #include "Executioner.h"
-#include "FEProblem.h"
-
-// LibMesh includes
-#include "libmesh/mesh_function.h"
-#include "libmesh/parameters.h"
 
 // System includes
 #include <string>
@@ -29,6 +24,7 @@
 // Forward Declarations
 class Transient;
 class TimeStepper;
+class FEProblem;
 
 template<>
 InputParameters validParams<Transient>();
@@ -48,8 +44,6 @@ public:
    */
   Transient(const InputParameters & parameters);
   virtual ~Transient();
-
-  virtual Problem & problem();
 
   /**
    * Initialize executioner
@@ -202,7 +196,7 @@ public:
    */
   Real unconstrainedDT() { return _unconstrained_dt; }
 
-  void parentOutputPositionChanged() { _problem.parentOutputPositionChanged(); }
+  void parentOutputPositionChanged() { _fe_problem.parentOutputPositionChanged(); }
 
   /**
    * Get the number of Picard iterations performed
@@ -219,6 +213,7 @@ protected:
    */
   virtual void solveStep(Real input_dt = -1.0);
 
+  /// Here for backward compatibility
   FEProblem & _problem;
 
   MooseEnum _time_scheme;

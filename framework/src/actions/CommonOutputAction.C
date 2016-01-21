@@ -48,6 +48,7 @@ InputParameters validParams<CommonOutputAction>()
    params.addParam<bool>("gnuplot", false, "Output the scalar and postprocessor results using the default settings for GNUPlot output");
    params.addParam<bool>("solution_history", false, "Print a solution history file (.slh) using the default settings");
    params.addParam<bool>("dofmap", false, "Create the dof map .json output file");
+   params.addParam<bool>("controls", false, "Enable the screen output of Control systems.");
 
    // Common parameters
 
@@ -57,6 +58,8 @@ InputParameters validParams<CommonOutputAction>()
    params.addParam<std::vector<std::string> >("output_if_base_contains", "If this is supplied then output will only be done in the case that the output base contains one of these strings.  This is helpful in outputting only a subset of outputs when using MultiApps.");
    params.addParam<unsigned int>("interval", 1, "The interval at which timesteps are output to the solution file");
    params.addParam<std::vector<Real> >("sync_times", std::vector<Real>(), "Times at which the output and solution is forced to occur");
+   params.addParam<bool>("append_date", false, "When true the date and time are appended to the output filename.");
+   params.addParam<std::string>("append_date_format", "The format of the date/time to append (see http://www.cplusplus.com/reference/ctime/strftime).");
 
    params.addParam<std::vector<VariableName> >("hide", "A list of the variables and postprocessors that should NOT be output to the Exodus file (may include Variables, ScalarVariables, and Postprocessor names).");
    params.addParam<std::vector<VariableName> >("show", "A list of the variables and postprocessors that should be output to the Exodus file (may include Variables, ScalarVariables, and Postprocessor names).");
@@ -145,6 +148,9 @@ CommonOutputAction::act()
   if (getParam<bool>("dofmap"))
     create("DOFMap");
 
+  if (getParam<bool>("controls") || _app.getParam<bool>("show_controls"))
+    create("ControlOutput");
+
   if (!getParam<bool>("color"))
     Moose::_color_console = false;
 }
@@ -157,11 +163,9 @@ CommonOutputAction::create(std::string object_type)
 
   // Create the complete object name (uses lower case of type)
   std::transform(object_type.begin(), object_type.end(), object_type.begin(), ::tolower);
-  std::string long_name("Outputs/");
-  long_name += object_type;
 
   // Create the action
-  MooseSharedPointer<MooseObjectAction> action = MooseSharedNamespace::static_pointer_cast<MooseObjectAction>(_action_factory.create("AddOutputAction", long_name, _action_params));
+  MooseSharedPointer<MooseObjectAction> action = MooseSharedNamespace::static_pointer_cast<MooseObjectAction>(_action_factory.create("AddOutputAction", object_type, _action_params));
 
   // Set flag indicating that the object to be created was created with short-cut syntax
   action->getObjectParams().set<bool>("_built_by_moose") = true;

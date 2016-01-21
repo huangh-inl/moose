@@ -12,11 +12,12 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
+// MOOSE includes
 #include "PartitionerAction.h"
-
+#include "MoosePartitioner.h"
 #include "FEProblem.h"
 #include "MooseEnum.h"
-#include "MoosePartitioner.h"
+#include "MooseMesh.h"
 
 template<>
 InputParameters validParams<PartitionerAction>()
@@ -35,5 +36,5 @@ PartitionerAction::act()
 {
   _mesh->setIsCustomPartitionerRequested(true);
   MooseSharedPointer<MoosePartitioner> mp = MooseSharedNamespace::static_pointer_cast<MoosePartitioner>(_factory.create(_type, _name, _moose_object_pars));
-  _mesh->setCustomPartitioner(mp->getPartitioner());
+  _mesh->setCustomPartitioner(mp.get());
 }

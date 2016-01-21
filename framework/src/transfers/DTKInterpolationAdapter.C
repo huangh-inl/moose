@@ -11,23 +11,25 @@
 /*                                                              */
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
+
 #include "libmesh/libmesh_config.h"
 
-#ifdef LIBMESH_HAVE_DTK
+#ifdef LIBMESH_TRILINOS_HAVE_DTK
 
+// MOOSE includes
 #include "Moose.h"
-
 #include "DTKInterpolationEvaluator.h"
 #include "DTKInterpolationAdapter.h"
 #include "Transfer.h"
 
+// libMesh includes
 #include "libmesh/mesh.h"
 #include "libmesh/numeric_vector.h"
 #include "libmesh/elem.h"
+#include "libmesh/equation_systems.h"
 
+// DTK includes
 #include <DTK_MeshTypes.hpp>
-
-#include <vector>
 
 DTKInterpolationAdapter::DTKInterpolationAdapter(Teuchos::RCP<const Teuchos::MpiComm<int> > in_comm, EquationSystems & in_es, const Point & offset, unsigned int from_dim):
     comm(in_comm),
@@ -303,9 +305,15 @@ DTKInterpolationAdapter::get_element_topology(const Elem * elem)
     return DataTransferKit::DTK_TRIANGLE;
   else if (type == QUAD4)
     return DataTransferKit::DTK_QUADRILATERAL;
+  else if (type == QUAD8)
+    return DataTransferKit::DTK_QUADRILATERAL;
+  else if (type == QUAD9)
+    return DataTransferKit::DTK_QUADRILATERAL;
   else if (type == TET4)
     return DataTransferKit::DTK_TETRAHEDRON;
   else if (type == HEX8)
+    return DataTransferKit::DTK_HEXAHEDRON;
+  else if (type == HEX27)
     return DataTransferKit::DTK_HEXAHEDRON;
   else if (type == PYRAMID5)
     return DataTransferKit::DTK_PYRAMID;
@@ -329,4 +337,4 @@ DTKInterpolationAdapter::get_semi_local_nodes(std::set<GlobalOrdinal> & semi_loc
   }
 }
 
-#endif // #ifdef LIBMESH_HAVE_DTK
+#endif // #ifdef LIBMESH_TRILINOS_HAVE_DTK

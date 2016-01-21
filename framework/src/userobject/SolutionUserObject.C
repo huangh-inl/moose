@@ -11,10 +11,13 @@
 /*                                                              */
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
+
 // MOOSE includes
 #include "MooseError.h"
 #include "SolutionUserObject.h"
 #include "RotationMatrix.h"
+#include "MooseUtils.h"
+#include "MooseMesh.h"
 
 // libMesh includes
 #include "libmesh/equation_systems.h"
@@ -24,6 +27,7 @@
 #include "libmesh/transient_system.h"
 #include "libmesh/parallel_mesh.h"
 #include "libmesh/serial_mesh.h"
+#include "libmesh/exodusII_io.h"
 
 template<>
 InputParameters validParams<SolutionUserObject>()
@@ -41,11 +45,9 @@ InputParameters validParams<SolutionUserObject>()
   params.addParam<std::string>("system", "nl0", "The name of the system to pull values out of (xda only).");
 
   // When using ExodusII a specific time is extracted
-  params.addParam<int>("timestep", -1, "Index of the single timestep used (exodusII only).  If not supplied, time interpolation will occur.");
+  params.addParam<std::string>("timestep", "Index of the single timestep used or \"LATEST\" for the last timestep (exodusII only).  If not supplied, time interpolation will occur.");
 
   // Add ability to perform coordinate transformation: scale, factor
-  params.addDeprecatedParam<std::vector<Real> >("coord_scale", "This name has been deprecated.",  "Please use scale instead");
-  params.addDeprecatedParam<std::vector<Real> >("coord_factor", "This name has been deprecated.",  "Please use translation instead");
   params.addParam<std::vector<Real> >("scale", std::vector<Real>(LIBMESH_DIM,1), "Scale factor for points in the simulation");
   params.addParam<std::vector<Real> >("scale_multiplier", std::vector<Real>(LIBMESH_DIM,1), "Scale multiplying factor for points in the simulation");
   params.addParam<std::vector<Real> >("translation", std::vector<Real>(LIBMESH_DIM,0), "Translation factors for x,y,z coordinates of the simulation");
@@ -68,7 +70,7 @@ SolutionUserObject::SolutionUserObject(const InputParameters & parameters) :
     _es_file(getParam<FileName>("es")),
     _system_name(getParam<std::string>("system")),
     _system_variables(getParam<std::vector<std::string> >("system_variables")),
-    _exodus_time_index(getParam<int>("timestep")),
+    _exodus_time_index(-1),
     _interpolate_times(false),
     _mesh(NULL),
     _es(NULL),
@@ -126,6 +128,9 @@ SolutionUserObject::SolutionUserObject(const InputParameters & parameters) :
   RealTensorValue vec1_to_z = RotationMatrix::rotVecToZ(_rotation1_vector);
   // _r1 is then: rotate points so vec1 lies along z; then rotate about angle1; then rotate points back
   _r1 = vec1_to_z.transpose()*(rot1_z*vec1_to_z);
+
+  if (isParamValid("timestep") && getParam<std::string>("timestep") == "-1")
+    mooseError("A \"timestep\" of -1 is no longer supported for interpolation. Instead simply remove this parameter altogether for interpolation");
 }
 
 SolutionUserObject::~SolutionUserObject()
@@ -169,7 +174,7 @@ SolutionUserObject::readXda()
   else if (_file_type ==  "xda")
     _es->read(_es_file, READ, EquationSystems::READ_HEADER | EquationSystems::READ_DATA | EquationSystems::READ_ADDITIONAL_DATA);
 
-  // This should never occur, just incase produce an error
+  // This should never occur, just in case produce an error
   else
     mooseError("Faild to determine proper read method for XDA/XDR equation system file: " << _es_file);
 
@@ -185,14 +190,28 @@ SolutionUserObject::readExodusII()
   if (_system_name == "")
     _system_name = "SolutionUserObjectSystem";
 
-  // Interpolate between times rather than using values from a set timestep
-  if (_exodus_time_index == -1)
-    _interpolate_times = true;  // Read the file
-
   // Read the Exodus file
   _exodusII_io = new ExodusII_IO (*_mesh);
   _exodusII_io->read(_mesh_file);
   _exodus_times = &_exodusII_io->get_time_steps();
+
+  if (isParamValid("timestep"))
+  {
+    std::string s_timestep = getParam<std::string>("timestep");
+    int n_steps = _exodusII_io->get_num_time_steps();
+    if (s_timestep == "LATEST")
+      _exodus_time_index = n_steps;
+    else
+    {
+      std::istringstream ss(s_timestep);
+      if (!(ss >> _exodus_time_index) || _exodus_time_index > n_steps)
+        mooseError("Invalid value passed as \"timestep\". Expected \"LATEST\" or a valid integer less than "
+                   << n_steps << ", received " << s_timestep);
+    }
+  }
+  else
+    // Interpolate between times rather than using values from a set timestep
+    _interpolate_times = true;
 
   // Check that the number of time steps is valid
   int num_exo_times = _exodus_times->size();
@@ -247,7 +266,7 @@ SolutionUserObject::readExodusII()
   for (std::vector<std::string>::const_iterator it = elemental.begin(); it != elemental.end(); ++it)
     _system->add_variable(*it, CONSTANT, MONOMIAL);
 
-  // Initilize the equations systems
+  // Initialize the equations systems
   _es->init();
 
   // Interpolate times
@@ -321,7 +340,7 @@ SolutionUserObject::directValue(const Node * node, const std::string & var_name)
   dof_id_type node_id = node->id();
   dof_id_type dof_id = _system->get_mesh().node(node_id).dof_number(sys_num, var_num, 0);
 
-  // Return the desried value for the dof
+  // Return the desired value for the dof
   return directValue(dof_id);
 }
 
@@ -353,7 +372,7 @@ SolutionUserObject::finalize()
 void
 SolutionUserObject::timestepSetup()
 {
-  // Update time interpolatation for ExodusII solution
+  // Update time interpolation for ExodusII solution
   if (_file_type == 1 && _interpolate_times)
     updateExodusTimeInterpolation(_t);
 }
@@ -426,7 +445,7 @@ SolutionUserObject::initialSetup()
       _system_variables.push_back(_system->variable_name(*it));
   }
 
-  // Otherwise, gather the numbers for the variabels given
+  // Otherwise, gather the numbers for the variables given
   else
   {
     for (std::vector<std::string>::const_iterator it = _system_variables.begin(); it != _system_variables.end(); ++it)
@@ -584,7 +603,7 @@ SolutionUserObject::pointValue(Real t, const Point & p, const std::string & var_
   // Extract the value at the current point
   Real val = evalMeshFunction(pt, var_name, 1);
 
-  // Interplolate
+  // Interpolate
   if (_file_type == 1 && _interpolate_times)
   {
     mooseAssert(t == _interpolation_time, "Time passed into value() must match time at last call to timestepSetup()");
@@ -650,4 +669,3 @@ SolutionUserObject::isVariableNodal(const std::string & var_name) const
   std::map<std::string, bool>::const_iterator it = _local_variable_nodal.find(var_name);
   return it->second;
 }
-

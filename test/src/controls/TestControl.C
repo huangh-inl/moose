@@ -13,15 +13,15 @@
 /****************************************************************/
 
 #include "TestControl.h"
+#include "FEProblem.h"
 
 template<>
 InputParameters validParams<TestControl>()
 {
   InputParameters params = validParams<Control>();
 
-  MooseEnum test_type("real variable point");
+  MooseEnum test_type("real variable point tid_warehouse_error disable_executioner");
   params.addRequiredParam<MooseEnum>("test_type", test_type, "Indicates the type of test to perform");
-
   params.addRequiredParam<std::string>("parameter", "The input parameter(s) to control. Specify a single parameter name and all parameters in all objects matching the name will be updated");
 
   return params;
@@ -32,10 +32,16 @@ TestControl::TestControl(const InputParameters & parameters) :
     _test_type(getParam<MooseEnum>("test_type"))
 {
   if (_test_type == "real")
-    getControlParam<Real>("parameter");
+    getControllableValue<Real>("parameter");
 
   else if (_test_type == "variable")
-    getControlParam<NonlinearVariableName>("parameter");
+    getControllableValue<NonlinearVariableName>("parameter");
+
+  else if (_test_type == "tid_warehouse_error")
+    _fe_problem.getControlWarehouse().initialSetup(12345);
+
+  else if (_test_type == "disable_executioner")
+    getControllableValueByName<bool>("Executioner/enable");
 
   else if (_test_type != "point")
     mooseError("Unknown test type.");
@@ -44,8 +50,6 @@ TestControl::TestControl(const InputParameters & parameters) :
 void
 TestControl::execute()
 {
-  Point new_pt(0.25, 0.25);
-  std::vector<Point *> pts = getControlParamVector<Point>("parameter");
-  for (unsigned int i = 0; i < pts.size(); ++i)
-    *pts[i] = new_pt;
+  if (_test_type == "point")
+    setControllableValue<Point>("parameter", Point(0.25, 0.25));
 }

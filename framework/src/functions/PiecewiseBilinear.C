@@ -12,39 +12,18 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
-/* PiecewiseBilinear reads from a file the information necessary to build the vectors x and y and
- * the ColumnMajorMatrix z, and then sends those (along with a sample point) to BilinearInterpolation.
- * See BilinearInterpolation in moose/src/utils for a description of how that works...it is a 2D linear
- * interpolation algorithm.  The format of the data file must be the following:
- *
- * 1,2
- * 1,1,2
- * 2,3,4
- *
- * The first row is the x vector data.
- * After the first row, the first column is the y vector data.
- * The rest of the data is used to build the ColumnMajorMatrix z.
- *
- * x = [1 2]
- * y = [1 2]
- *
- * z = [1 2]
- *     [3 4]
- *
- *     z has to be x.size() by y.size()
- *
- * PiecewisBilinear also sends samples to BilinearInterpolation.  These samples are the z-coordinate of the current
- * integration point, and the current value of time.  The name of the file that contains this data has to be included
- * in the function block of the inpute file like this...data_file = example.csv.
- */
-
 #include "PiecewiseBilinear.h"
+#include "ColumnMajorMatrix.h"
+#include "BilinearInterpolation.h"
 
 template<>
 InputParameters validParams<PiecewiseBilinear>()
 {
   InputParameters params = validParams<Function>();
   params.addParam<FileName>("data_file", "", "File holding csv data for use with PiecewiseBilinear");
+  params.addParam<std::vector<Real> >("x", "The x abscissa values");
+  params.addParam<std::vector<Real> >("y", "The y abscissa values");
+  params.addParam<std::vector<Real> >("z", "The ordinate values");
   params.addParam<int>("axis", -1, "The axis used (0, 1, or 2 for x, y, or z).");
   params.addParam<int>("xaxis", -1, "The coordinate used for x-axis data (0, 1, or 2 for x, y, or z).");
   params.addParam<int>("yaxis", -1, "The coordinate used for y-axis data (0, 1, or 2 for x, y, or z).");
@@ -55,7 +34,6 @@ InputParameters validParams<PiecewiseBilinear>()
 
 PiecewiseBilinear::PiecewiseBilinear(const InputParameters & parameters) :
     Function(parameters),
-    _bilinear_interp(NULL),
     _data_file_name(getParam<FileName>("data_file")),
     _axis(getParam<int>("axis")),
     _yaxis(getParam<int>("yaxis")),
@@ -66,37 +44,62 @@ PiecewiseBilinear::PiecewiseBilinear(const InputParameters & parameters) :
     _scale_factor( getParam<Real>("scale_factor") ),
     _radial(getParam<bool>("radial"))
 {
-  if (!parameters.isParamValid("data_file"))
-  {
-    mooseError("In PiecewiseBilinear, 'data_file' must be specified.");
-  }
 
   if (!_axisValid && !_yaxisValid && !_xaxisValid)
-    mooseError("Error in " << name() << ". None of axis, yaxis, or xaxis properly defined.  Allowable range is 0-2");
+    mooseError("In PiecewiseBilinear " << _name << ": None of axis, yaxis, or xaxis properly defined.  Allowable range is 0-2");
 
   if (_axisValid && (_yaxisValid || _xaxisValid))
-    mooseError("Error in " << name() << ". Cannot define axis with either yaxis or xaxis");
+    mooseError("In PiecewiseBilinear " << _name << ": Cannot define axis with either yaxis or xaxis");
 
   if (_radial && (!_yaxisValid || !_xaxisValid))
-    mooseError("Error in " << name() << ". yaxis and xaxis must be defined when radial = true");
+    mooseError("In PiecewiseBilinear " << _name << ": yaxis and xaxis must be defined when radial = true");
 
   std::vector<Real> x;
   std::vector<Real> y;
   ColumnMajorMatrix z;
+  std::vector<Real> z_vec;
 
-  // Parse to get x, y, z
-  parse( x, y, z );
+  if (!_data_file_name.empty())
+  {
+    if ( parameters.isParamValid("x") || parameters.isParamValid("y") || parameters.isParamValid("z") )
+      mooseError("In PiecewiseBilinear: Cannot specify 'data_file' and 'x', 'y', or 'z' together.");
+    else
+      parse( x, y, z );
+  }
 
-  _bilinear_interp = new BilinearInterpolation( x, y, z );
+  else if ( !(parameters.isParamValid("x") && parameters.isParamValid("y") && parameters.isParamValid("z")) )
+      mooseError("In PiecewiseBilinear: 'x' and 'y' and 'z' must be specified if any one is specified.");
+
+  else
+  {
+    x = getParam<std::vector<Real> >("x");
+    y = getParam<std::vector<Real> >("y");
+    z_vec = getParam<std::vector<Real> >("z");
+
+    //check that size of z = (size of x)*(size of y)
+    if (z_vec.size() != x.size()*y.size())
+      mooseError("In PiecewiseBilinear: Size of z should be the size of x times the size of y.");
+
+    //reshape and populate z matrix
+    z.reshape(y.size(),x.size());
+    int idx = 0;
+    for (unsigned int i = 0; i < y.size(); i++)
+      for (unsigned int j = 0; j < x.size(); j++)
+      {
+        z(i,j) = z_vec[idx];
+        idx += 1;
+      }
+  }
+
+  _bilinear_interp.reset(new BilinearInterpolation(x, y, z));
 }
 
 PiecewiseBilinear::~PiecewiseBilinear()
 {
-  delete _bilinear_interp;
 }
 
 Real
-PiecewiseBilinear::value( Real t, const Point & p)
+PiecewiseBilinear::value(Real t, const Point & p)
 {
   Real retVal(0);
   if (_yaxisValid && _xaxisValid && _radial)
@@ -107,24 +110,17 @@ PiecewiseBilinear::value( Real t, const Point & p)
     retVal = _bilinear_interp->sample( r, t );
   }
   else if (_axisValid)
-  {
     retVal = _bilinear_interp->sample( p(_axis), t );
-  }
   else if (_yaxisValid && !_radial)
   {
     if (_xaxisValid)
-    {
       retVal = _bilinear_interp->sample( p(_xaxis), p(_yaxis) );
-    }
     else
-    {
       retVal = _bilinear_interp->sample( t, p(_yaxis) );
-    }
   }
   else
-  {
     retVal = _bilinear_interp->sample( p(_xaxis), t );
-  }
+
   return retVal * _scale_factor;
 }
 
@@ -135,7 +131,7 @@ PiecewiseBilinear::parse( std::vector<Real> & x,
 {
   std::ifstream file(_data_file_name.c_str());
   if (!file.good())
-    mooseError("Error opening file '" + _data_file_name + "' from PiecewiseBilinear function.");
+    mooseError("In PiecewiseBilinear " << _name << ": Error opening file '" + _data_file_name + "'.");
   std::string line;
   unsigned int linenum= 0;
   unsigned int itemnum = 0;
@@ -148,6 +144,7 @@ PiecewiseBilinear::parse( std::vector<Real> & x,
     std::istringstream linestream(line);
     std::string item;
     itemnum = 0;
+
     while (getline (linestream, item, ','))
     {
       itemnum++;
@@ -156,18 +153,12 @@ PiecewiseBilinear::parse( std::vector<Real> & x,
       i >> d;
       data.push_back( d );
     }
+
     if (linenum == 1)
-    {
       num_cols = itemnum;
-    }
-    else
-    {
-      if (num_cols+1 != itemnum)
-      {
-        mooseError("ERROR! Read "<<itemnum<<" columns of data but expected "<<num_cols+1<<
-                   " columns while reading line "<<linenum<<" of '"+ _data_file_name + "' for PiecewiseBilinear function.");
-      }
-    }
+    else if (num_cols+1 != itemnum)
+      mooseError("In PiecewiseBilinear " << _name << ": Read " << itemnum << " columns of data but expected " << num_cols+1
+                 << " columns while reading line " << linenum << " of '" << _data_file_name << "'.");
   }
 
   x.resize(itemnum-1);
@@ -193,8 +184,7 @@ PiecewiseBilinear::parse( std::vector<Real> & x,
       ++offset;
     }
   }
+
   if (data.size() != offset)
-  {
     mooseError("ERROR! Inconsistency in data read from '" + _data_file_name + "' for PiecewiseBilinear function.");
-  }
 }

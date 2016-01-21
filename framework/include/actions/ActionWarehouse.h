@@ -29,7 +29,6 @@
 typedef std::vector<Action *>::iterator ActionIterator;
 
 class MooseMesh;
-class Executioner;
 class Syntax;
 class ActionFactory;
 
@@ -100,6 +99,46 @@ public:
    * Retrieve a constant vector of \p Action pointers associated with the passed in task.
    */
   const std::vector<Action *> & getActionsByName(const std::string & task) const;
+
+  /**
+   * Retrieve an action with its name and the desired type.
+   * @param name The action name.
+   */
+  template <class T>
+  const T & getAction(const std::string & name)
+    {
+      T* p = NULL;
+      for (unsigned int i=0; i<_all_ptrs.size(); ++i)
+      {
+        Action * act = _all_ptrs[i].get();
+        if (act->name() == name)
+        {
+          p = dynamic_cast<T*>(act);
+          if (p)
+            break;
+        }
+      }
+      if (!p)
+        mooseError("Action with name being "+name+" does not exist");
+      return *p;
+    }
+
+  /**
+   * Retrieve all actions in a specific type.
+   */
+  template <class T>
+  std::set<const T *> getActions()
+    {
+      std::set<const T*> actions;
+      for (unsigned int i=0; i<_all_ptrs.size(); i++)
+      {
+        Action * act = _all_ptrs[i].get();
+        T* p = dynamic_cast<T*>(act);
+        if (p)
+          actions.insert(p);
+      }
+      return actions;
+    }
 
   /**
    * Check if Actions associated with passed in task exist.

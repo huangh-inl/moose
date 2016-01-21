@@ -93,7 +93,7 @@ FiniteStrainCrystalPlasticity::FiniteStrainCrystalPlasticity(const InputParamete
     _acc_slip_old(declarePropertyOld<Real>("acc_slip")), // Accumulated alip of previous increment
     _update_rot(declareProperty<RankTwoTensor>("update_rot")), // Rotation tensor considering material rotation and crystal orientation
     _update_rot_old(declarePropertyOld<RankTwoTensor>("update_rot")),
-    _deformation_gradient_old(declarePropertyOld<RankTwoTensor>("deformation gradient")),
+    _deformation_gradient_old(declarePropertyOld<RankTwoTensor>("deformation_gradient")),
     _mo(_nss*LIBMESH_DIM),
     _no(_nss*LIBMESH_DIM),
     _slip_incr(_nss),
@@ -738,8 +738,8 @@ FiniteStrainCrystalPlasticity::solveStress()
   {
     dpk2 = - jac.invSymm() * resid; // Calculate stress increment
     _pk2_tmp = _pk2_tmp + dpk2; // Update stress
-    calcResidual(resid);
-    internalVariableUpdateNRiteration(); //update _fe_prev_inv
+    calc_resid_jacob(resid,jac);
+    internalVariableUpdateNRiteration(); //update _fp_prev_inv
 
     if (_err_tol)
     {
@@ -760,8 +760,6 @@ FiniteStrainCrystalPlasticity::solveStress()
       _err_tol = true;
       return;
     }
-
-    calc_resid_jacob(resid, jac); // Calculate stress residual
 
     if (_use_line_search)
       rnorm = resid.L2norm();

@@ -15,17 +15,19 @@
 #ifndef CONVERSION_H
 #define CONVERSION_H
 
-#include "ExecStore.h"
+// MOOSE includes
 #include "MooseTypes.h"
-#include "MultiMooseEnum.h"
 
 // libMesh
 #include "libmesh/enum_order.h"
 #include "libmesh/enum_quadrature_type.h"
 #include "libmesh/point.h"
 
-namespace Moose {
+// Forward declarations
+class MultiMooseEnum;
 
+namespace Moose
+{
   // Scalar conversions
   template<typename T>
   T stringToEnum(const std::string & s);
@@ -41,9 +43,6 @@ namespace Moose {
 
   template<>
   CoordinateSystemType stringToEnum<CoordinateSystemType>(const std::string & s);
-
-  template<>
-  PPSOutputType stringToEnum<PPSOutputType>(const std::string & s);
 
   template<>
   SolveType stringToEnum<SolveType>(const std::string & s);
@@ -73,7 +72,6 @@ namespace Moose {
    */
   template<>
   std::string stringify(const SolveType & t);
-
 }
 
 /**

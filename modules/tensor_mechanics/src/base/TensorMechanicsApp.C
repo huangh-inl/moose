@@ -7,6 +7,7 @@
 #include "TensorMechanicsApp.h"
 #include "Moose.h"
 #include "AppFactory.h"
+#include "MooseSyntax.h"
 
 #include "TensorMechanicsAction.h"
 #include "DynamicTensorMechanicsAction.h"
@@ -36,6 +37,7 @@
 #include "TwoPhaseStressMaterial.h"
 #include "MultiPhaseStressMaterial.h"
 #include "SimpleEigenStrainMaterial.h"
+#include "CompositeElasticityTensor.h"
 #include "ComputeElasticityTensor.h"
 #include "ComputeIsotropicElasticityTensor.h"
 #include "ComputeSmallStrain.h"
@@ -70,11 +72,14 @@
 #include "TensorMechanicsHardeningCutExponential.h"
 #include "TensorMechanicsHardeningCubic.h"
 #include "ElementPropertyReadFile.h"
-#include "HyperElasticStress.h"
-#include "FlowRateModel.h"
-#include "RambergOsgoodHardening.h"
 #include "EulerAngleFileReader.h"
+#include "HEVPLinearHardening.h"
+#include "HEVPRambergOsgoodHardening.h"
+#include "HEVPEqvPlasticStrain.h"
+#include "HEVPEqvPlasticStrainRate.h"
+#include "HEVPFlowRatePowerLawJ2.h"
 
+#include "CylindricalRankTwoAux.h"
 #include "RankTwoAux.h"
 #include "RankFourAux.h"
 #include "TensorElasticEnergyAux.h"
@@ -145,6 +150,7 @@ TensorMechanicsApp::registerObjects(Factory & factory)
   registerMaterial(TwoPhaseStressMaterial);
   registerMaterial(MultiPhaseStressMaterial);
   registerMaterial(SimpleEigenStrainMaterial);
+  registerMaterial(CompositeElasticityTensor);
   registerMaterial(ComputeElasticityTensor);
   registerMaterial(ComputeIsotropicElasticityTensor);
   registerMaterial(ComputeSmallStrain);
@@ -179,11 +185,14 @@ TensorMechanicsApp::registerObjects(Factory & factory)
   registerUserObject(TensorMechanicsHardeningCutExponential);
   registerUserObject(TensorMechanicsHardeningCubic);
   registerUserObject(ElementPropertyReadFile);
-  registerUserObject(HyperElasticStress);
-  registerUserObject(FlowRateModel);
-  registerUserObject(RambergOsgoodHardening);
   registerUserObject(EulerAngleFileReader);
+  registerUserObject(HEVPLinearHardening);
+  registerUserObject(HEVPRambergOsgoodHardening);
+  registerUserObject(HEVPEqvPlasticStrain);
+  registerUserObject(HEVPEqvPlasticStrainRate);
+  registerUserObject(HEVPFlowRatePowerLawJ2);
 
+  registerAux(CylindricalRankTwoAux);
   registerAux(RankTwoAux);
   registerAux(RankFourAux);
   registerAux(TensorElasticEnergyAux);

@@ -15,16 +15,16 @@
 #ifndef COMPUTEDIRACTHREAD_H
 #define COMPUTEDIRACTHREAD_H
 
-//Moose Includes
+// Moose Includes
 #include "ParallelUniqueId.h"
-#include "DiracKernelWarehouse.h"
-#include "DiracKernel.h"
 #include "ThreadedElementLoop.h"
-#include "NonlinearSystem.h"
+
 // libMesh includes
 #include "libmesh/elem_range.h"
 
-#include <vector>
+// Forward declarations
+class NonlinearSystem;
+class DiracKernel;
 
 typedef StoredRange<std::set<const Elem *>::const_iterator, const Elem *> DistElemRange;
 
@@ -50,6 +50,9 @@ public:
 protected:
   SparseMatrix<Number> * _jacobian;
   NonlinearSystem & _sys;
+
+  /// Storage for DiracKernel objects
+  const MooseObjectWarehouse<DiracKernel> & _dirac_kernels;
 };
 
 #endif //COMPUTEDIRACTHREAD_H

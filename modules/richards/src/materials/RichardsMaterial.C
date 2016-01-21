@@ -5,11 +5,14 @@
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
 
+#include "RichardsMaterial.h"
+#include "Assembly.h"
+#include "MooseMesh.h"
 
 #include <cmath> // std::sinh and std::cosh
-#include "RichardsMaterial.h"
 
-
+// libmesh includes
+#include "libmesh/quadrature.h"
 
 template<>
 InputParameters validParams<RichardsMaterial>()

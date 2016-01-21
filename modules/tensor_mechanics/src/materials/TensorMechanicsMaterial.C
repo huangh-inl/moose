@@ -7,6 +7,11 @@
 // Original class author: A.M. Jokisaari, O. Heinonen, M. R. Tonks
 
 #include "TensorMechanicsMaterial.h"
+#include "Function.h"
+#include "MooseMesh.h"
+
+// libmesh includes
+#include "libmesh/quadrature.h"
 
 template<>
 InputParameters validParams<TensorMechanicsMaterial>()

@@ -16,10 +16,12 @@
 #define DISPLACEDSYSTEM_H
 
 #include "SystemBase.h"
-// libMesh include
-#include "libmesh/explicit_system.h"
-#include "libmesh/transient_system.h"
 
+// libMesh include
+#include "libmesh/transient_system.h"
+#include "libmesh/explicit_system.h"
+
+// Forward declarations
 class DisplacedProblem;
 
 
@@ -59,11 +61,6 @@ public:
                                std::vector<dof_id_type> & /*n_nz*/,
                                std::vector<dof_id_type> & /*n_oz*/)
     {}
-
-  /**
-   * Return whether or not the NonlinearSystem is currently computing a Jacobian matrix
-   */
-  virtual bool currentlyComputingJacobian() { return _undisplaced_system.currentlyComputingJacobian(); }
 
   /**
    * Adds this variable to the list of variables to be zeroed during each residual evaluation.

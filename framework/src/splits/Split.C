@@ -12,12 +12,15 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
+// MOOSE includes
 #include "Split.h"
 #include "InputParameters.h"
 #include "PetscSupport.h"
+#include "FEProblem.h"
+#include "NonlinearSystem.h"
 
-#if defined(LIBMESH_HAVE_PETSC) && !PETSC_VERSION_LESS_THAN(3,3,0)
 // petsc 3.3.0 or later needed
+#if defined(LIBMESH_HAVE_PETSC) && !PETSC_VERSION_LESS_THAN(3,3,0)
 
 template<>
 InputParameters validParams<Split>()
@@ -193,7 +196,7 @@ Split::setup(const std::string& prefix)
     // Finally, recursively configure the splits contained within this split.
     for (unsigned int i = 0; i < _splitting.size(); ++i)
     {
-      Split* split = _fe_problem.getNonlinearSystem().getSplit(_splitting[i]);
+      MooseSharedPointer<Split> split = _fe_problem.getNonlinearSystem().getSplit(_splitting[i]);
       std::string sprefix = prefix + "fieldsplit_" + _splitting[i] + "_";
       split->setup(sprefix);
     }

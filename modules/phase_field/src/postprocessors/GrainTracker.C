@@ -5,10 +5,12 @@
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
 
+// MOOSE includes
 #include "GrainTracker.h"
 #include "MooseMesh.h"
 #include "GeneratedMesh.h"
 #include "EBSDReader.h"
+#include "NonlinearSystem.h"
 
 // LibMesh includes
 #include "libmesh/periodic_boundary_base.h"
@@ -67,22 +69,8 @@ template<> void dataLoad(std::istream & stream, GrainTracker::BoundingSphereInfo
 template<>
 InputParameters validParams<GrainTracker>()
 {
-  InputParameters params = validParams<FeatureFloodCount>();
-  params.addParam<int>("tracking_step", 0, "The timestep for when we should start tracking grains");
-  params.addParam<Real>("convex_hull_buffer", 1.0, "The buffer around the convex hull used to determine"
-                                                   "when features intersect");
-  params.addParam<bool>("remap_grains", true, "Indicates whether remapping should be done or not (default: true)");
-  params.addParam<bool>("compute_op_maps", false, "Indicates whether the data structures that"
-                                                  "hold the active order parameter information"
-                                                  "should be populated or not");
-  params.addParam<bool>("center_of_mass_tracking", false, "Indicates whether the grain tracker uses bounding sphere centers"
-                                                          "or center of mass calcuations for tracking grains");
-  params.addParam<UserObjectName>("ebsd_reader", "Optional: EBSD Reader for initial condition");
-
-  params.addRequiredCoupledVarWithAutoBuild("variable", "var_name_base", "op_num", "Array of coupled variables");
-
-  // We are using "addV" to add the variable parameter on the fly
-  params.suppressParameter<std::vector<VariableName> >("variable");
+  InputParameters params = validParams<GrainTrackerInterface>();
+  params.addClassDescription("Grain Tracker object for running reduced order parameter simulations without grain coalescence.");
 
   return params;
 }
@@ -313,7 +301,7 @@ GrainTracker::buildBoundingSpheres()
         else
           p_ptr = mesh.query_node_ptr(*it2);
         if (p_ptr)
-          for (unsigned int i = 0; i < mesh.spatial_dimension(); ++i)
+          for (unsigned int i = 0; i < LIBMESH_DIM; ++i)
           {
             min_points[set_counter*3+i] = std::min(min_points[set_counter*3+i], (*p_ptr)(i));
             max_points[set_counter*3+i] = std::max(max_points[set_counter*3+i], (*p_ptr)(i));
@@ -466,10 +454,10 @@ GrainTracker::trackGrains()
       std::set<unsigned int> used_indices;
       std::map<unsigned int, unsigned int> error_indices;
 
-      if (grain_num != new_grains.size())
+      if (grain_num != new_grains.size() && processor_id() == 0)
         mooseWarning("Mismatch:\nEBSD centers: " << grain_num << " Grain Tracker Centers: " << new_grains.size());
 
-      unsigned int next_index = grain_num+1;
+      unsigned int next_index = grain_num;
       for (unsigned int i = 0; i < new_grains.size(); ++i)
       {
         Real min_centroid_diff = std::numeric_limits<Real>::max();
@@ -497,7 +485,7 @@ GrainTracker::trackGrains()
                      << center_points[closest_match_idx] << " absolute distance: " << min_centroid_diff << '\n';
           _unique_grains[next_index] = new_grains[i];
 
-          _unique_grain_to_ebsd_num[next_index] = closest_match_idx+1;
+          _unique_grain_to_ebsd_num[next_index] = closest_match_idx;
 
           ++next_index;
         }
@@ -505,9 +493,9 @@ GrainTracker::trackGrains()
         {
           Moose::out << "Assigning center " << closest_match_idx << " "
                      << center_points[closest_match_idx] << " absolute distance: " << min_centroid_diff << '\n';
-          _unique_grains[closest_match_idx+1] = new_grains[i];
+          _unique_grains[closest_match_idx] = new_grains[i];
 
-          _unique_grain_to_ebsd_num[closest_match_idx+1] = closest_match_idx+1;
+          _unique_grain_to_ebsd_num[closest_match_idx] = closest_match_idx;
 
           used_indices.insert(closest_match_idx);
         }
@@ -515,7 +503,7 @@ GrainTracker::trackGrains()
       if (!error_indices.empty())
       {
         for (std::map<unsigned int, UniqueGrain *>::const_iterator grain_it = _unique_grains.begin(); grain_it != _unique_grains.end(); ++grain_it)
-          Moose::out << "Grain " << grain_it->first << ": " << center_points[grain_it->first - 1] << '\n';
+          Moose::out << "Grain " << grain_it->first << ": " << center_points[grain_it->first] << '\n';
 
         Moose::out << "Error Indices:\n";
         for (std::map<unsigned int, unsigned int>::const_iterator it = error_indices.begin(); it != error_indices.end(); ++it)
@@ -528,10 +516,10 @@ GrainTracker::trackGrains()
     }
     else
     {
-      for (unsigned int i = 1; i <= new_grains.size(); ++i)
+      for (unsigned int i = 0; i < new_grains.size(); ++i)
       {
-        new_grains[i-1]->status = MARKED;
-        _unique_grains[i] = new_grains[i-1];                   // Transfer ownership of the memory
+        new_grains[i]->status = MARKED;
+        _unique_grains[i] = new_grains[i];                   // Transfer ownership of the memory
       }
     }
     return;  // Return early - no matching or tracking to do
@@ -632,10 +620,10 @@ GrainTracker::trackGrains()
       Moose::out << COLOR_YELLOW
                  << "*****************************************************************************\n"
                  << "Couldn't find a matching grain while working on variable index: " << new_grains[i]->variable_idx
-                 << "\nCreating new unique grain: " << _unique_grains.size() + 1
+                 << "\nCreating new unique grain: " << _unique_grains.size()
                  << "\n*****************************************************************************\n" << COLOR_DEFAULT;
       new_grains[i]->status = MARKED;
-      _unique_grains[_unique_grains.size() + 1] = new_grains[i];   // transfer ownership
+      _unique_grains[_unique_grains.size()] = new_grains[i];   // transfer ownership
     }
 
 
@@ -953,7 +941,7 @@ GrainTracker::calculateBubbleVolumes()
   Moose::perf_log.push("calculateBubbleVolumes()", "GrainTracker");
 
   // The size of the bubble array will be sized to the max index of the unique grains map
-  unsigned int max_id = _unique_grains.size() ? _unique_grains.rbegin()->first + 1 : 0;
+  unsigned int max_id = _unique_grains.size() ? _unique_grains.rbegin()->first + 1: 0;
   _all_bubble_volumes.resize(max_id, 0);
 
   const MeshBase::const_element_iterator el_end = _mesh.getMesh().active_local_elements_end();

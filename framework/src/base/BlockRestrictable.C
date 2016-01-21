@@ -15,6 +15,8 @@
 // MOOSE Includes
 #include "BlockRestrictable.h"
 #include "Material.h"
+#include "FEProblem.h"
+#include "MooseMesh.h"
 
 template<>
 InputParameters validParams<BlockRestrictable>()
@@ -36,24 +38,25 @@ InputParameters validParams<BlockRestrictable>()
 
 // Standard constructor
 BlockRestrictable::BlockRestrictable(const InputParameters & parameters) :
-    _blk_material_data(NULL),
     _blk_dual_restrictable(parameters.get<bool>("_dual_restrictable")),
     _blk_feproblem(parameters.isParamValid("_fe_problem") ? parameters.get<FEProblem *>("_fe_problem") : NULL),
     _blk_mesh(parameters.isParamValid("_mesh") ? parameters.get<MooseMesh *>("_mesh") : NULL),
     _boundary_ids(_empty_boundary_ids),
-    _blk_tid(parameters.isParamValid("_tid") ? parameters.get<THREAD_ID>("_tid") : 0)
+    _blk_tid(parameters.isParamValid("_tid") ? parameters.get<THREAD_ID>("_tid") : 0),
+    _block_restricted(false)
 {
   initializeBlockRestrictable(parameters);
 }
 
 // Dual restricted constructor
 BlockRestrictable::BlockRestrictable(const InputParameters & parameters, const std::set<BoundaryID> & boundary_ids) :
-    _blk_material_data(NULL),
     _blk_dual_restrictable(parameters.get<bool>("_dual_restrictable")),
     _blk_feproblem(parameters.isParamValid("_fe_problem") ? parameters.get<FEProblem *>("_fe_problem") : NULL),
     _blk_mesh(parameters.isParamValid("_mesh") ? parameters.get<MooseMesh *>("_mesh") : NULL),
     _boundary_ids(boundary_ids),
-    _blk_tid(parameters.isParamValid("_tid") ? parameters.get<THREAD_ID>("_tid") : 0)
+    _blk_tid(parameters.isParamValid("_tid") ? parameters.get<THREAD_ID>("_tid") : 0),
+    _block_restricted(false)
+
 {
   initializeBlockRestrictable(parameters);
 }
@@ -62,7 +65,7 @@ void
 BlockRestrictable::initializeBlockRestrictable(const InputParameters & parameters)
 {
   // The name and id of the object
-  const std::string name = parameters.get<std::string>("name");
+  const std::string name = parameters.get<std::string>("_object_name");
 
   // If the mesh pointer is not defined, but FEProblem is, get it from there
   if (_blk_feproblem != NULL && _blk_mesh == NULL)
@@ -74,7 +77,7 @@ BlockRestrictable::initializeBlockRestrictable(const InputParameters & parameter
 
   // Populate the MaterialData pointer
   if (_blk_feproblem != NULL)
-    _blk_material_data = _blk_feproblem->getMaterialData(_blk_tid);
+    _blk_material_data = _blk_feproblem->getMaterialData(Moose::BLOCK_MATERIAL_DATA, _blk_tid);
 
   // The 'block' input is defined
   if (parameters.isParamValid("block"))
@@ -121,6 +124,8 @@ BlockRestrictable::initializeBlockRestrictable(const InputParameters & parameter
     _blk_ids.insert(Moose::ANY_BLOCK_ID);
     _blocks = std::vector<SubdomainName>(1, "ANY_BLOCK_ID");
   }
+  else
+    _block_restricted = true;
 
   // If this object is block restricted, check that defined blocks exist on the mesh
   if (_blk_ids.find(Moose::ANY_BLOCK_ID) == _blk_ids.end())
@@ -247,7 +252,7 @@ BlockRestrictable::variableSubdomainIDs(const InputParameters & parameters) cons
 }
 
 const std::set<SubdomainID> &
-BlockRestrictable::meshBlockIDs()
+BlockRestrictable::meshBlockIDs() const
 {
   return _blk_mesh->meshSubdomains();
 }
@@ -256,8 +261,8 @@ bool
 BlockRestrictable::hasBlockMaterialPropertyHelper(const std::string & prop_name)
 {
 
-// Reference to MaterialWarehouse for testing and retrieving block ids
-  MaterialWarehouse & material_warehouse = _blk_feproblem->getMaterialWarehouse(_blk_tid);
+  // Reference to MaterialWarehouse for testing and retrieving block ids
+  const MooseObjectWarehouse<Material> & warehouse = _blk_feproblem->getMaterialWarehouse();
 
   // Complete set of ids that this object is active
   const std::set<SubdomainID> & ids = hasBlocks(Moose::ANY_BLOCK_ID) ? meshBlockIDs() : blockIDs();
@@ -269,10 +274,10 @@ BlockRestrictable::hasBlockMaterialPropertyHelper(const std::string & prop_name)
     std::set<std::string> declared_props;
 
     // If block materials exist, populated the set of properties that were declared
-    if (material_warehouse.hasMaterials(*id_it))
+    if (warehouse.hasActiveBlockObjects(*id_it))
     {
-      std::vector<Material *> mats = material_warehouse.getMaterials(*id_it);
-      for (std::vector<Material *>::iterator mat_it = mats.begin(); mat_it != mats.end(); ++mat_it)
+      const std::vector<MooseSharedPointer<Material> > & mats = warehouse.getActiveBlockObjects(*id_it);
+      for (std::vector<MooseSharedPointer<Material> >::const_iterator mat_it = mats.begin(); mat_it != mats.end(); ++mat_it)
       {
         const std::set<std::string> & mat_props = (*mat_it)->getSuppliedItems();
         declared_props.insert(mat_props.begin(), mat_props.end());

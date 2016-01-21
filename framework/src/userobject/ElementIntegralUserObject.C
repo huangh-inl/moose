@@ -12,7 +12,11 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
+// MOOSE includes
 #include "ElementIntegralUserObject.h"
+
+// libmesh includes
+#include "libmesh/quadrature.h"
 
 template<>
 InputParameters validParams<ElementIntegralUserObject>()

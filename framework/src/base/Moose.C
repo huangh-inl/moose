@@ -28,6 +28,8 @@
 #include "FileMesh.h"
 #include "GeneratedMesh.h"
 #include "TiledMesh.h"
+#include "ImageMesh.h"
+
 // MeshModifiers
 #include "MeshExtruder.h"
 #include "SideSetsFromPoints.h"
@@ -42,6 +44,8 @@
 #include "OrientedSubdomainBoundingBox.h"
 #include "RenameBlock.h"
 #include "AssignElementSubdomainID.h"
+#include "ImageSubdomain.h"
+#include "BlockDeleter.h"
 
 // problems
 #include "FEProblem.h"
@@ -126,7 +130,6 @@
 #include "Transient.h"
 #include "InversePowerMethod.h"
 #include "NonlinearEigen.h"
-#include "PetscTSExecutioner.h"
 
 // functions
 #include "Axisymmetric2D3DSolutionFunction.h"
@@ -142,6 +145,7 @@
 #include "SplineFunction.h"
 #include "PiecewiseMultilinear.h"
 #include "LinearCombinationFunction.h"
+#include "ImageFunction.h"
 
 // materials
 #include "GenericConstantMaterial.h"
@@ -195,11 +199,11 @@
 #include "NodalExtremeValue.h"
 #include "ElementExtremeValue.h"
 #include "DifferencePostprocessor.h"
+#include "ScalePostprocessor.h"
 #include "NumPicardIterations.h"
 #include "FunctionSideIntegral.h"
 #include "ExecutionerAttributeReporter.h"
 #include "PercentChangePostprocessor.h"
-#include "RealParameterReporter.h"
 #include "ElementL2Difference.h"
 
 // vector PPS
@@ -211,6 +215,7 @@
 #include "VectorOfPostprocessors.h"
 #include "LeastSquaresFit.h"
 #include "ElementsAlongLine.h"
+#include "IntersectionPointsAlongLine.h"
 #include "LineMaterialRealSampler.h"
 
 // user objects
@@ -253,6 +258,7 @@
 #include "AddBoundsVectorsAction.h"
 #include "EqualValueConstraint.h"
 #include "EqualValueBoundaryConstraint.h"
+#include "LinearNodalConstraint.h"
 
 // ScalarKernels
 #include "ODETimeDerivative.h"
@@ -284,6 +290,7 @@
 #include "DT2.h"
 #include "PostprocessorDT.h"
 #include "AB2PredictorCorrector.h"
+
 // time integrators
 #include "SteadyState.h"
 #include "ImplicitEuler.h"
@@ -293,10 +300,11 @@
 #include "ExplicitMidpoint.h"
 #include "LStableDirk2.h"
 #include "LStableDirk3.h"
+#include "AStableDirk4.h"
+#include "LStableDirk4.h"
 #include "ImplicitMidpoint.h"
 #include "Heun.h"
 #include "Ralston.h"
-//
 #include "SimplePredictor.h"
 #include "AdamsPredictor.h"
 
@@ -306,7 +314,7 @@
 #include "AutoPositionsMultiApp.h"
 
 // Transfers
-#ifdef LIBMESH_HAVE_DTK
+#ifdef LIBMESH_TRILINOS_HAVE_DTK
   #include "MultiAppDTKUserObjectTransfer.h"
   #include "MultiAppDTKInterpolationTransfer.h"
 #endif
@@ -321,7 +329,6 @@
 #include "MultiAppPostprocessorTransfer.h"
 #include "MultiAppProjectionTransfer.h"
 #include "MultiAppPostprocessorToAuxScalarTransfer.h"
-
 
 // Actions
 #include "AddBCAction.h"
@@ -381,6 +388,7 @@
 #include "MaterialOutputAction.h"
 #include "CheckOutputAction.h"
 #include "SetupRecoverFileBaseAction.h"
+#include "AddNodalKernelAction.h"
 
 // Outputs
 #ifdef LIBMESH_HAVE_EXODUS_API
@@ -400,13 +408,22 @@
 #include "VariableResidualNormsDebugOutput.h"
 #include "TopResidualDebugOutput.h"
 #include "DOFMapOutput.h"
+#include "ControlOutput.h"
+#ifdef LIBMESH_HAVE_CXX11
 #include "ICEUpdater.h"
+#endif
 
 // Controls
 #include "RealFunctionControl.h"
+#include "TimePeriod.h"
 
 // Partitioner
 #include "LibmeshPartitioner.h"
+
+// NodalKernels
+#include "ConstantRate.h"
+#include "TimeDerivativeNodalKernel.h"
+#include "UserForcingFunctionNodalKernel.h"
 
 namespace Moose {
 
@@ -419,6 +436,7 @@ registerObjects(Factory & factory)
   registerMesh(FileMesh);
   registerMesh(GeneratedMesh);
   registerMesh(TiledMesh);
+  registerMesh(ImageMesh);
 
   // mesh modifiers
   registerMeshModifier(MeshExtruder);
@@ -434,6 +452,8 @@ registerObjects(Factory & factory)
   registerMeshModifier(OrientedSubdomainBoundingBox);
   registerMeshModifier(RenameBlock);
   registerMeshModifier(AssignElementSubdomainID);
+  registerMeshModifier(ImageSubdomain);
+  registerMeshModifier(BlockDeleter);
 
   // problems
   registerProblem(FEProblem);
@@ -517,11 +537,6 @@ registerObjects(Factory & factory)
   registerExecutioner(Transient);
   registerExecutioner(InversePowerMethod);
   registerExecutioner(NonlinearEigen);
-#if defined(LIBMESH_HAVE_PETSC) && !PETSC_VERSION_LESS_THAN(3,4,0)
-#if 0 // This seems to be broken right now -- doesn't work wiith petsc >= 3.4 either
-  registerExecutioner(PetscTSExecutioner);
-#endif
-#endif
 
   // functions
   registerFunction(Axisymmetric2D3DSolutionFunction);
@@ -537,6 +552,7 @@ registerObjects(Factory & factory)
   registerFunction(SplineFunction);
   registerFunction(PiecewiseMultilinear);
   registerFunction(LinearCombinationFunction);
+  registerFunction(ImageFunction);
 
   // materials
   registerMaterial(GenericConstantMaterial);
@@ -570,7 +586,6 @@ registerObjects(Factory & factory)
   registerPostprocessor(ScalarVariable);
   registerPostprocessor(NumVars);
   registerPostprocessor(NumResidualEvaluations);
-  registerDeprecatedObjectName(FunctionValuePostprocessor, "PlotFunction", "09/18/2015 12:00");
   registerPostprocessor(Receiver);
   registerPostprocessor(SideAverageValue);
   registerPostprocessor(SideFluxIntegral);
@@ -589,12 +604,12 @@ registerObjects(Factory & factory)
   registerPostprocessor(NodalExtremeValue);
   registerPostprocessor(ElementExtremeValue);
   registerPostprocessor(DifferencePostprocessor);
+  registerPostprocessor(ScalePostprocessor);
   registerPostprocessor(FunctionValuePostprocessor);
   registerPostprocessor(NumPicardIterations);
   registerPostprocessor(FunctionSideIntegral);
   registerPostprocessor(ExecutionerAttributeReporter);
   registerPostprocessor(PercentChangePostprocessor);
-  registerPostprocessor(RealParameterReporter);
   registerPostprocessor(ElementL2Difference);
 
   // vector PPS
@@ -606,6 +621,7 @@ registerObjects(Factory & factory)
   registerVectorPostprocessor(VectorOfPostprocessors);
   registerVectorPostprocessor(LeastSquaresFit);
   registerVectorPostprocessor(ElementsAlongLine);
+  registerVectorPostprocessor(IntersectionPointsAlongLine);
   registerVectorPostprocessor(LineMaterialRealSampler);
 
   // user objects
@@ -643,6 +659,7 @@ registerObjects(Factory & factory)
   registerConstraint(CoupledTiedValueConstraint);
   registerConstraint(EqualValueConstraint);
   registerConstraint(EqualValueBoundaryConstraint);
+  registerConstraint(LinearNodalConstraint);
 
   // Scalar kernels
   registerScalarKernel(ODETimeDerivative);
@@ -691,6 +708,8 @@ registerObjects(Factory & factory)
   registerTimeIntegrator(ExplicitMidpoint);
   registerTimeIntegrator(LStableDirk2);
   registerTimeIntegrator(LStableDirk3);
+  registerTimeIntegrator(AStableDirk4);
+  registerTimeIntegrator(LStableDirk4);
   registerTimeIntegrator(ImplicitMidpoint);
   registerTimeIntegrator(Heun);
   registerTimeIntegrator(Ralston);
@@ -699,7 +718,7 @@ registerObjects(Factory & factory)
   registerPredictor(AdamsPredictor);
 
   // Transfers
-#ifdef LIBMESH_HAVE_DTK
+#ifdef LIBMESH_TRILINOS_HAVE_DTK
   registerTransfer(MultiAppDTKUserObjectTransfer);
   registerTransfer(MultiAppDTKInterpolationTransfer);
 #endif
@@ -738,17 +757,24 @@ registerObjects(Factory & factory)
   registerOutput(VariableResidualNormsDebugOutput);
   registerOutput(TopResidualDebugOutput);
   registerNamedOutput(DOFMapOutput, "DOFMap");
+  registerOutput(ControlOutput);
 
   // Currently the ICE Updater requires TBB
-  #ifdef LIBMESH_HAVE_TBB_API
+  #ifdef LIBMESH_HAVE_CXX11
   registerOutput(ICEUpdater);
   #endif
 
   // Controls
   registerControl(RealFunctionControl);
+  registerControl(TimePeriod);
 
   // Partitioner
   registerPartitioner(LibmeshPartitioner);
+
+  // NodalKernels
+  registerNodalKernel(TimeDerivativeNodalKernel);
+  registerNodalKernel(ConstantRate);
+  registerNodalKernel(UserForcingFunctionNodalKernel);
 
   registered = true;
 }
@@ -782,6 +808,8 @@ addActionTypes(Syntax & syntax)
 
   registerMooseObjectTask("add_kernel",                   Kernel,                 false);
   appendMooseObjectTask  ("add_kernel",                   EigenKernel);
+
+  registerMooseObjectTask("add_nodal_kernel",             NodalKernel,            false);
 
   registerMooseObjectTask("add_material",                 Material,               false);
   registerMooseObjectTask("add_bc",                       BoundaryCondition,      false);
@@ -895,8 +923,8 @@ addActionTypes(Syntax & syntax)
 "(init_mesh)"
 "(prepare_mesh)"
 "(add_mesh_modifier)"
-"(add_mortar_interface)"
 "(execute_mesh_modifiers)"
+"(add_mortar_interface)"
 "(uniform_refine_mesh)"
 "(setup_mesh_complete)"
 "(determine_system_type)"
@@ -933,7 +961,7 @@ addActionTypes(Syntax & syntax)
 "(add_output)"
 "(add_postprocessor)"
 "(add_vector_postprocessor)"
-"(add_aux_kernel, add_bc, add_damper, add_dirac_kernel, add_kernel, add_dg_kernel, add_scalar_kernel, add_aux_scalar_kernel, add_indicator, add_marker)"
+"(add_aux_kernel, add_bc, add_damper, add_dirac_kernel, add_kernel, add_nodal_kernel, add_dg_kernel, add_scalar_kernel, add_aux_scalar_kernel, add_indicator, add_marker)"
 "(add_control)"
 "(check_output)"
 "(check_integrity)"
@@ -1016,6 +1044,7 @@ registerActions(Syntax & syntax, ActionFactory & action_factory)
   registerAction(AddInitialConditionAction, "add_ic");
 
   registerAction(AddKernelAction, "add_kernel");
+  registerAction(AddNodalKernelAction, "add_nodal_kernel");
   registerAction(AddKernelAction, "add_aux_kernel");
   registerAction(AddScalarKernelAction, "add_scalar_kernel");
   registerAction(AddScalarKernelAction, "add_aux_scalar_kernel");
@@ -1097,20 +1126,6 @@ enableFPE(bool on)
     libMesh::enableFPE(on);
 }
 
-// Currently there are 6 exec types (See Moose.h)
-const std::vector<ExecFlagType> populateExecTypes()
-{
-  std::vector<ExecFlagType> exec_types(6);
-  exec_types[0] = EXEC_INITIAL;
-  exec_types[1] = EXEC_TIMESTEP_BEGIN;
-  exec_types[2] = EXEC_NONLINEAR;
-  exec_types[3] = EXEC_LINEAR;
-  exec_types[4] = EXEC_TIMESTEP_END;
-  exec_types[5] = EXEC_CUSTOM;
-  return exec_types;
-}
-
-const std::vector<ExecFlagType> exec_types = populateExecTypes();
 
 PerfLog setup_perf_log("Setup");
 

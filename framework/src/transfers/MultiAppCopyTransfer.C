@@ -12,14 +12,15 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
+// MOOSE includes
 #include "MultiAppCopyTransfer.h"
-
-// Moose
 #include "MooseTypes.h"
 #include "FEProblem.h"
 #include "DisplacedProblem.h"
+#include "MultiApp.h"
+#include "MooseMesh.h"
 
-// libMesh
+// libMesh includes
 #include "libmesh/system.h"
 #include "libmesh/mesh_tools.h"
 #include "libmesh/id_types.h"
@@ -58,7 +59,7 @@ MultiAppCopyTransfer::execute()
   {
     case TO_MULTIAPP:
     {
-      FEProblem & from_problem = *_multi_app->problem();
+      FEProblem & from_problem = _multi_app->problem();
       MooseVariable & from_var = from_problem.getVariable(0, _from_var_name);
 
       MeshBase * from_mesh = NULL;
@@ -89,7 +90,7 @@ MultiAppCopyTransfer::execute()
           MPI_Comm swapped = Moose::swapLibMeshComm(_multi_app->comm());
 
           // Loop over the master nodes and set the value of the variable
-          System * to_sys = find_sys(_multi_app->appProblem(i)->es(), _to_var_name);
+          System * to_sys = find_sys(_multi_app->appProblem(i).es(), _to_var_name);
 
           unsigned int sys_num = to_sys->number();
           unsigned int var_num = to_sys->variable_number(_to_var_name);
@@ -98,7 +99,7 @@ MultiAppCopyTransfer::execute()
 
           MeshBase * mesh = NULL;
 
-          mesh = &_multi_app->appProblem(i)->mesh().getMesh();
+          mesh = &_multi_app->appProblem(i).mesh().getMesh();
 
           bool is_nodal = to_sys->variable_type(var_num).family == LAGRANGE;
 
@@ -153,7 +154,7 @@ MultiAppCopyTransfer::execute()
     }
     case FROM_MULTIAPP:
     {
-      FEProblem & to_problem = *_multi_app->problem();
+      FEProblem & to_problem = _multi_app->problem();
       MooseVariable & to_var = to_problem.getVariable(0, _to_var_name);
       SystemBase & to_system_base = to_var.sys();
 
@@ -181,7 +182,7 @@ MultiAppCopyTransfer::execute()
 
         MPI_Comm swapped = Moose::swapLibMeshComm(_multi_app->comm());
 
-        FEProblem & from_problem = *_multi_app->appProblem(i);
+        FEProblem & from_problem = _multi_app->appProblem(i);
         MooseVariable & from_var = from_problem.getVariable(0, _from_var_name);
         SystemBase & from_system_base = from_var.sys();
 
@@ -251,4 +252,3 @@ MultiAppCopyTransfer::execute()
 
   _console << "Finished CopyTransfer " << name() << std::endl;
 }
-

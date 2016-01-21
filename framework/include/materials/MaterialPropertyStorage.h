@@ -19,18 +19,16 @@
 #include "MaterialProperty.h"
 #include "HashMap.h"
 
-//libMesh
-#include "libmesh/elem.h"
-#include "libmesh/quadrature.h"
-#include "libmesh/mesh.h"
-
-#include <vector>
-#include <map>
-#include <string>
-
+// Forward declarations
 class Material;
 class MaterialData;
 class QpMap;
+
+// libMesh forward declarations
+namespace libMesh
+{
+class QBase;
+}
 
 /**
  * Stores the stateful material properties computed by materials.
@@ -110,7 +108,7 @@ public:
    * @param elem Element we are on
    * @param side Side of the element 'elem' (0 for volumetric material properties)
    */
-  void initStatefulProps(MaterialData & material_data, std::vector<Material *> & mats, unsigned int n_qpoints, const Elem & elem, unsigned int side = 0);
+  void initStatefulProps(MaterialData & material_data, const std::vector<MooseSharedPointer<Material> > & mats, unsigned int n_qpoints, const Elem & elem, unsigned int side = 0);
 
   /**
    * Shift the material properties in time.

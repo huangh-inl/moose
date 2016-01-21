@@ -12,9 +12,14 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
+// MOOSE includes
 #include "MoosePreconditioner.h"
 #include "FEProblem.h"
-#include "Executioner.h" // for common parameters, see validParams below
+#include "PetscSupport.h"
+#include "NonlinearSystem.h"
+
+// libMesh includes
+#include "libmesh/numeric_vector.h"
 
 template<>
 InputParameters validParams<MoosePreconditioner>()
@@ -27,7 +32,7 @@ InputParameters validParams<MoosePreconditioner>()
   params.registerBase("MoosePreconditioner");
 
 #ifdef LIBMESH_HAVE_PETSC
-  params += commonExecutionParameters();
+  params += Moose::PetscSupport::getPetscValidParams();
 #endif //LIBMESH_HAVE_PETSC
 
   return params;
@@ -96,4 +101,3 @@ MoosePreconditioner::copyVarValues(MeshBase & mesh,
     }
   }
 }
-

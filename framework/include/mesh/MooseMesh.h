@@ -15,29 +15,33 @@
 #ifndef MOOSEMESH_H
 #define MOOSEMESH_H
 
-#include "InputParameters.h"
 #include "MooseObject.h"
 #include "BndNode.h"
 #include "BndElement.h"
-#include "MooseTypes.h"
 #include "Restartable.h"
 #include "MooseEnum.h"
 
 // libMesh
 #include "libmesh/mesh.h"
-#include "libmesh/boundary_info.h"
 #include "libmesh/elem_range.h"
 #include "libmesh/node_range.h"
-#include "libmesh/periodic_boundaries.h"
-#include "libmesh/quadrature.h"
-
-#include <map>
+#include "libmesh/mesh_tools.h"
 
 //forward declaration
 class MooseMesh;
 class NonlinearSystem;
 class Assembly;
-namespace libMesh { class ExodusII_IO; }
+
+// libMesh forward declarations
+namespace libMesh
+{
+class ExodusII_IO;
+class QBase;
+class PeriodicBoundaries;
+class Partitioner;
+}
+
+// Useful typedefs
 typedef StoredRange<std::set<Node *>::iterator, Node*> SemiLocalNodeRange;
 
 template<>
@@ -112,7 +116,7 @@ public:
    * Returns a vector of boundary IDs for the requested element on the
    * requested side.
    */
-  std::vector<BoundaryID> boundaryIDs(const Elem *const elem, const unsigned short int side) const;
+  std::vector<BoundaryID> getBoundaryIDs(const Elem *const elem, const unsigned short int side) const;
 
   /**
    * Returns a const reference to a set of all user-specified
@@ -131,9 +135,18 @@ public:
 
   /**
    * If not already created, creates a map from every node to all
-   * elements to which they are created.
+   * elements to which they are connected.
    */
   std::map<dof_id_type, std::vector<dof_id_type> > & nodeToElemMap();
+
+  /**
+   * If not already created, creates a map from every node to all
+   * _active_ _semilocal_ elements to which they are connected.
+   * Semilocal elements include local elements and elements that share at least
+   * one node with a local element.
+   * \note Extra ghosted elements are not included in this map!
+   */
+  std::map<dof_id_type, std::vector<dof_id_type> > & nodeToActiveSemilocalElemMap();
 
   /**
    * These structs are required so that the bndNodes{Begin,End} and
@@ -216,6 +229,13 @@ public:
    */
   bool prepared() const;
   void prepared(bool state);
+
+  /**
+   * If this method is called, we will call libMesh's prepare_for_use method when we
+   * call Moose's prepare method. This should only be set when the mesh structure is changed
+   * by MeshModifiers (i.e. Element deletion).
+   */
+  void needsPrepareForUse();
 
   /**
    * Declares that the MooseMesh has changed, invalidates cached data
@@ -375,6 +395,13 @@ public:
    * Get the current patch update strategy.
    */
   const MooseEnum & getPatchUpdateStrategy();
+
+  /**
+   * Get a (slightly inflated) processor bounding box.
+   *
+   * @param inflation_multiplier This amount will be multiplied by the length of the diagonal of the bounding box to find the amount to inflate the bounding box by in all directions.
+   */
+  MeshTools::BoundingBox getInflatedProcessorBoundingBox(Real inflation_multiplier = 0.01) const;
 
   /**
    * Implicit conversion operator from MooseMesh -> libMesh::MeshBase.
@@ -682,10 +709,9 @@ public:
   MooseMesh::MortarInterface * getMortarInterface(BoundaryID master, BoundaryID slave);
 
   /**
-   * Setter and getter for custom partitioner
+   * Setter for custom partitioner
    */
-  Partitioner * getCustomPartitioner() const;
-  void setCustomPartitioner(Partitioner * custom_partitioner);
+  void setCustomPartitioner(Partitioner * partitioner);
 
   /**
    * Setter and getter for _custom_partitioner_requested
@@ -712,7 +738,7 @@ protected:
   bool _partitioner_overridden;
 
   /// The custom partitioner
-  Partitioner * _custom_partitioner;
+  UniquePtr<Partitioner> _custom_partitioner;
   bool _custom_partitioner_requested;
 
   /// Convenience enums
@@ -737,6 +763,9 @@ protected:
 
   /// True if prepare has been called on the mesh
   bool _is_prepared;
+
+  /// True if prepare_for_use should be called when Mesh is prepared
+  bool _needs_prepare_for_use;
 
   /// The elements that were just refined.
   ConstElemPointerRange * _refined_elements;
@@ -765,6 +794,10 @@ protected:
   /// A map of all of the current nodes to the elements that they are connected to.
   std::map<dof_id_type, std::vector<dof_id_type> > _node_to_elem_map;
   bool _node_to_elem_map_built;
+
+  /// A map of all of the current nodes to the active elements that they are connected to.
+  std::map<dof_id_type, std::vector<dof_id_type> > _node_to_active_semilocal_elem_map;
+  bool _node_to_active_semilocal_elem_map_built;
 
   /**
    * A set of subdomain IDs currently present in the mesh.

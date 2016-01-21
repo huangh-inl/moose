@@ -14,14 +14,17 @@
 
 #include "Transient.h"
 
-//Moose includes
+// MOOSE includes
 #include "Factory.h"
 #include "SubProblem.h"
-#include "TimePeriod.h"
+#include "TimePeriodOld.h"
 #include "TimeStepper.h"
 #include "MooseApp.h"
 #include "Conversion.h"
-//libMesh includes
+#include "FEProblem.h"
+#include "NonlinearSystem.h"
+
+// libMesh includes
 #include "libmesh/implicit_system.h"
 #include "libmesh/nonlinear_implicit_system.h"
 #include "libmesh/transient_system.h"
@@ -58,7 +61,6 @@ InputParameters validParams<Transient>()
   params.addParam<bool>("trans_ss_check",  false,  "Whether or not to check for steady state conditions");
   params.addParam<Real>("ss_check_tol",    1.0e-08,"Whenever the relative residual changes by less than this the solution will be considered to be at steady state.");
   params.addParam<Real>("ss_tmin",         0.0,    "Minimum number of timesteps to take before checking for steady state conditions.");
-  params.addParam<Real>("predictor_scale", "The scale factor for the predictor (can range from 0 to 1)");
 
   params.addParam<std::vector<std::string> >("time_periods", "The names of periods");
   params.addParam<std::vector<Real> >("time_period_starts", "The start times of time periods");
@@ -86,7 +88,7 @@ InputParameters validParams<Transient>()
 
 Transient::Transient(const InputParameters & parameters) :
     Executioner(parameters),
-    _problem(*parameters.getCheckedPointerParam<FEProblem *>("_fe_problem", "This might happen if you don't have a mesh")),
+    _problem(_fe_problem),
     _time_scheme(getParam<MooseEnum>("scheme")),
     _t_step(_problem.timeStep()),
     _time(_problem.time()),
@@ -133,27 +135,11 @@ Transient::Transient(const InputParameters & parameters) :
   // Either a start_time has been forced on us, or we want to tell the App about what our start time is (in case anyone else is interested.
   if (_app.hasStartTime())
     _start_time = _app.getStartTime();
-  else if (parameters.paramSetByUser("start_time"))
+  else if (parameters.isParamSetByUser("start_time"))
     _app.setStartTime(_start_time);
 
   _time = _time_old = _start_time;
   _problem.transient(true);
-
-  if (parameters.isParamValid("predictor_scale"))
-  {
-    mooseWarning("Parameter 'predictor_scale' is deprecated, migrate your input file to use Predictor sub-block.");
-
-    Real predscale = getParam<Real>("predictor_scale");
-    if (predscale >= 0.0 && predscale <= 1.0)
-    {
-      InputParameters params = _app.getFactory().getValidParams("SimplePredictor");
-      params.set<Real>("scale") = predscale;
-      _problem.addPredictor("SimplePredictor", "predictor", params);
-    }
-
-    else
-      mooseError("Input value for predictor_scale = "<< predscale << ", outside of permissible range (0 to 1)");
-  }
 
   if (!_restart_file_base.empty())
     _problem.setRestartFile(_restart_file_base);
@@ -304,8 +290,6 @@ Transient::incrementStepOrReject()
   }
   else
   {
-    _console<<"\nRestoring Multiapps Because of solve failure!"<<std::endl;
-
     _problem.restoreMultiApps(EXEC_TIMESTEP_BEGIN, true);
     _problem.restoreMultiApps(EXEC_TIMESTEP_END, true);
     _time_stepper->rejectStep();
@@ -330,11 +314,9 @@ Transient::takeStep(Real input_dt)
     {
       _console << "\nBeginning Picard Iteration " << _picard_it << "\n" << std::endl;
 
-      Real current_norm = _problem.computeResidualL2Norm();
-
       if (_picard_it == 0) // First Picard iteration - need to save off the initial nonlinear residual
       {
-        _picard_initial_norm = current_norm;
+        _picard_initial_norm = _problem.computeResidualL2Norm();
         _console << "Initial Picard Norm: " << _picard_initial_norm << '\n';
       }
     }
@@ -404,14 +386,7 @@ Transient::solveStep(Real input_dt)
 
   _problem.timestepSetup();
 
-  // Compute Pre-Aux User Objects (Timestep begin)
-  _problem.computeUserObjects(EXEC_TIMESTEP_BEGIN, UserObjectWarehouse::PRE_AUX);
-
-  // Compute TimestepBegin AuxKernels
-  _problem.computeAuxiliaryKernels(EXEC_TIMESTEP_BEGIN);
-
-  // Compute Post-Aux User Objects (Timestep begin)
-  _problem.computeUserObjects(EXEC_TIMESTEP_BEGIN, UserObjectWarehouse::POST_AUX);
+  _problem.execute(EXEC_TIMESTEP_BEGIN);
 
   if (_picard_max_its > 1)
   {
@@ -422,6 +397,9 @@ Transient::solveStep(Real input_dt)
 
   // Perform output for timestep begin
   _problem.outputStep(EXEC_TIMESTEP_BEGIN);
+
+  // Update warehouse active objects
+  _problem.updateActiveObjects();
 
   _time_stepper->step();
 
@@ -435,17 +413,9 @@ Transient::solveStep(Real input_dt)
 
     _solution_change_norm = _problem.solutionChangeNorm();
 
-    _problem.computeUserObjects(EXEC_TIMESTEP_END, UserObjectWarehouse::PRE_AUX);
-#if 0
-    // User definable callback
-    if (_estimate_error)
-      estimateTimeError();
-#endif
-
     _problem.onTimestepEnd();
+    _problem.execute(EXEC_TIMESTEP_END);
 
-    _problem.computeAuxiliaryKernels(EXEC_TIMESTEP_END);
-    _problem.computeUserObjects(EXEC_TIMESTEP_END, UserObjectWarehouse::POST_AUX);
     _problem.execTransfers(EXEC_TIMESTEP_END);
     _multiapps_converged = _problem.execMultiApps(EXEC_TIMESTEP_END, _picard_max_its == 1);
 
@@ -693,7 +663,7 @@ Transient::preExecute()
   */
 
   // Add time period start times to sync times
-  const std::vector<TimePeriod *> time_periods = _problem.getTimePeriods();
+  const std::vector<TimePeriodOld *> time_periods = _problem.getTimePeriods();
   for (unsigned int i = 0; i < time_periods.size(); ++i)
     _time_stepper->addSyncTime(time_periods[i]->start());
 
@@ -704,12 +674,6 @@ void
 Transient::postExecute()
 {
   _time_stepper->postExecute();
-}
-
-Problem &
-Transient::problem()
-{
-  return _problem;
 }
 
 void

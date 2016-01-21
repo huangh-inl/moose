@@ -5,13 +5,16 @@
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
 
+// MOOSE includes
 #include "MechanicalContactConstraint.h"
-
 #include "SystemBase.h"
 #include "PenetrationLocator.h"
+#include "Assembly.h"
+#include "MooseMesh.h"
 
 // libMesh includes
 #include "libmesh/string_to_enum.h"
+#include "libmesh/sparse_matrix.h"
 
 template<>
 InputParameters validParams<MechanicalContactConstraint>()
@@ -72,7 +75,7 @@ MechanicalContactConstraint::MechanicalContactConstraint(const InputParameters &
     _non_displacement_vars_jacobian(getParam<bool>("non_displacement_variables_jacobian"))
 {
   _overwrite_slave_residual = false;
-  _penetration_locator.skipOffProcessSlaveNodes();
+
   if (parameters.isParamValid("tangential_tolerance"))
     _penetration_locator.setTangentialTolerance(getParam<Real>("tangential_tolerance"));
 

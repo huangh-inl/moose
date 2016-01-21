@@ -21,7 +21,6 @@
 
 #include "Action.h"
 #include "InputParameters.h"
-#include "ActionWarehouse.h"
 
 
 /**
@@ -37,7 +36,6 @@
 #define addTaskDependency(action, depends_on)                      syntax.addDependency(action, depends_on)
 
 // Forward Declaration
-class ActionFactory;
 class MooseApp;
 
 /**
@@ -85,7 +83,7 @@ public:
 
   std::string getTaskName(const std::string & action);
 
-  MooseSharedPointer<Action> create(const std::string & action, const std::string & parsing_syntax, InputParameters parameters);
+  MooseSharedPointer<Action> create(const std::string & action, const std::string & action_name, InputParameters parameters);
 
   InputParameters getValidParams(const std::string & name);
 

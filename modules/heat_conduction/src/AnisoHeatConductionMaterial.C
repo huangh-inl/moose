@@ -4,7 +4,13 @@
 /*          All contents are licensed under LGPL V2.1           */
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
+
 #include "AnisoHeatConductionMaterial.h"
+#include "Function.h"
+#include "MooseMesh.h"
+
+// libmesh includes
+#include "libmesh/quadrature.h"
 
 template<>
 InputParameters validParams<AnisoHeatConductionMaterial>()

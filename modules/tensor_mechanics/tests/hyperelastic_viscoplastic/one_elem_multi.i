@@ -67,18 +67,16 @@
     block = 0
   [../]
   [./peeq_soft]
-    type = MaterialStdVectorAux
+    type = MaterialRealAux
     variable = peeq_soft
-    property = internal_var
-    index = 0
+    property = ep_eqv1
     execute_on = timestep_end
     block = 0
   [../]
   [./peeq_hard]
-    type = MaterialStdVectorAux
+    type = MaterialRealAux
     variable = peeq_hard
-    property = internal_var
-    index = 1
+    property = ep_eqv2
     execute_on = timestep_end
     block = 0
   [../]
@@ -112,34 +110,49 @@
 []
 
 [UserObjects]
-  [./stress_uo]
-    type = HyperElasticStress
-  [../]
-  [./flowstress_soft]
-    type = RambergOsgoodHardening
+  [./flowstress1]
+    type = HEVPRambergOsgoodHardening
     yield_stress = 100
     hardening_exponent = 0.1
     reference_plastic_strain = 0.002
+    intvar_prop_name = ep_eqv1
   [../]
-  [./flowstress_hard]
-    type = RambergOsgoodHardening
+  [./flowstress2]
+    type = HEVPRambergOsgoodHardening
     yield_stress = 100
     hardening_exponent = 0.3
     reference_plastic_strain = 0.002
+    intvar_prop_name = ep_eqv2
   [../]
-  [./flowrate_soft]
-    type = FlowRateModel
+  [./flowrate1]
+    type = HEVPFlowRatePowerLawJ2
     reference_flow_rate = 0.0001
     flow_rate_exponent = 50.0
     flow_rate_tol = 1
-    flow_stress_user_object = flowstress_soft
+    strength_prop_name = flowstress1
   [../]
-  [./flowrate_hard]
-    type = FlowRateModel
+  [./flowrate2]
+    type = HEVPFlowRatePowerLawJ2
     reference_flow_rate = 0.0001
     flow_rate_exponent = 50.0
     flow_rate_tol = 1
-    flow_stress_user_object = flowstress_hard
+    strength_prop_name = flowstress2
+  [../]
+  [./ep_eqv1]
+     type = HEVPEqvPlasticStrain
+     intvar_rate_prop_name = ep_eqv_rate1
+  [../]
+  [./ep_eqv_rate1]
+     type = HEVPEqvPlasticStrainRate
+     flow_rate_prop_name = flowrate1
+  [../]
+  [./ep_eqv2]
+     type = HEVPEqvPlasticStrain
+     intvar_rate_prop_name = ep_eqv_rate2
+  [../]
+  [./ep_eqv_rate2]
+     type = HEVPEqvPlasticStrainRate
+     flow_rate_prop_name = flowrate2
   [../]
 []
 
@@ -156,8 +169,10 @@
     resid_rel_tol = 1e-8
     maxiters = 50
     max_substep_iteration = 5
-    stress_user_object = stress_uo
-    flow_rate_user_objects = 'flowrate_soft flowrate_hard'
+    flow_rate_user_objects = 'flowrate1 flowrate2'
+    strength_user_objects = 'flowstress1 flowstress2'
+    internal_var_user_objects = 'ep_eqv1 ep_eqv2'
+    internal_var_rate_user_objects = 'ep_eqv_rate1 ep_eqv_rate2'
   [../]
   [./elasticity_tensor]
     type = ComputeElasticityTensor

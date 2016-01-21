@@ -6,28 +6,14 @@
 /****************************************************************/
 
 #include "FauxGrainTracker.h"
+#include "MooseMesh.h"
 
 template<>
 InputParameters validParams<FauxGrainTracker>()
 {
-  InputParameters params = validParams<FeatureFloodCount>();
-  params.addParam<int>("tracking_step", 0, "The timestep for when we should start tracking grains");
+  InputParameters params = validParams<GrainTrackerInterface>();
+  params.addClassDescription("Fake grain tracker object for cases where the number of grains is equal to the number of order parameters.");
 
-
-  // Ignored parameters (Here to support the same interface for GrainTracker)
-  params.addParam<Real>("convex_hull_buffer", 1.0, "The buffer around the convex hull used to determine"
-                                                   "when features intersect");
-  params.addParam<bool>("remap_grains", true, "Indicates whether remapping should be done or not (default: true)");
-  params.addParam<bool>("compute_op_maps", false, "Indicates whether the data structures that"
-                                                  "hold the active order parameter information"
-                                                  "should be populated or not");
-  params.addParam<bool>("center_of_mass_tracking", false, "Indicates whether the grain tracker uses bounding sphere centers"
-                                                          "or center of mass calculations for tracking grains");
-  params.addParam<UserObjectName>("ebsd_reader", "Optional: EBSD Reader for initial condition");
-
-  params.addRequiredCoupledVarWithAutoBuild("variable", "var_name_base", "op_num", "Array of coupled variables");
-
-  params.suppressParameter<std::vector<VariableName> >("variable");
   return params;
 }
 
@@ -37,7 +23,10 @@ FauxGrainTracker::FauxGrainTracker(const InputParameters & parameters) :
     GrainTrackerInterface(),
     _tracking_step(getParam<int>("tracking_step"))
 {
-  _faux_data.resize(1);
+  // initialize faux data with identity map
+  _faux_data.resize(_vars.size());
+  for (unsigned int var_num = 0; var_num < _faux_data.size(); ++var_num)
+    _faux_data[var_num] = std::make_pair(var_num, var_num);
 }
 
 FauxGrainTracker::~FauxGrainTracker()
@@ -73,7 +62,7 @@ FauxGrainTracker::getElementalValue(dof_id_type /*element_id*/) const
 }
 
 const std::vector<std::pair<unsigned int, unsigned int> > &
-FauxGrainTracker::getElementalValues(dof_id_type elem_id) const
+FauxGrainTracker::getElementalValues(dof_id_type /*elem_id*/) const
 {
   return _faux_data;
 }
@@ -88,8 +77,8 @@ FauxGrainTracker::initialize()
 void
 FauxGrainTracker::execute()
 {
-  const MeshBase::element_iterator end = _mesh.getMesh().active_elements_end();
-  for (MeshBase::element_iterator el = _mesh.getMesh().active_elements_begin(); el != end; ++el)
+  const MeshBase::element_iterator end = _mesh.getMesh().active_local_elements_end();
+  for (MeshBase::element_iterator el = _mesh.getMesh().active_local_elements_begin(); el != end; ++el)
   {
     const Elem * current_elem = *el;
 

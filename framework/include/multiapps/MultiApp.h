@@ -14,22 +14,23 @@
 #ifndef MULTIAPP_H
 #define MULTIAPP_H
 
-#include "MooseApp.h"
-#include "MooseEnum.h"
+#include "MooseObject.h"
 #include "SetupInterface.h"
 #include "Restartable.h"
-#include "RestartableDataIO.h"
-
-// libMesh includes
-#include "libmesh/mesh_tools.h"
-#include "libmesh/numeric_vector.h"
 
 class MultiApp;
 class UserObject;
 class FEProblem;
 class Executioner;
-class OutputWarehouse;
-namespace libMesh{ namespace MeshTools { class BoundingBox; } }
+class MooseApp;
+class Backup;
+
+// libMesh forward declarations
+namespace libMesh
+{
+namespace MeshTools { class BoundingBox; }
+template <typename T> class NumericVector;
+}
 
 template<>
 InputParameters validParams<MultiApp>();
@@ -128,13 +129,13 @@ public:
   /**
    * Get the FEProblem this MultiApp is part of.
    */
-  FEProblem * problem() { return _fe_problem; }
+  FEProblem & problem() { return _fe_problem; }
 
   /**
    * Get the FEProblem for the global app is part of.
    * @param app The global app number
    */
-  FEProblem * appProblem(unsigned int app);
+  FEProblem & appProblem(unsigned int app);
 
   /**
    * Get a UserObject base for a specific global app
@@ -269,8 +270,11 @@ protected:
    */
   unsigned int globalAppToLocal(unsigned int global_app);
 
+  /// call back executed right before app->runInputFile()
+  virtual void preRunInputFile();
+
   /// The FEProblem this MultiApp is part of
-  FEProblem * _fe_problem;
+  FEProblem & _fe_problem;
 
   /// The type of application to build
   std::string _app_type;

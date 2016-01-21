@@ -13,6 +13,7 @@
 /****************************************************************/
 
 #include "AssignElementSubdomainID.h"
+#include "MooseMesh.h"
 
 template<>
 InputParameters validParams<AssignElementSubdomainID>()
@@ -66,7 +67,6 @@ AssignElementSubdomainID::modify()
     for (dof_id_type e=0; el != end_el; ++el, ++e)
     {
       Elem* elem = *el;
-      ElemType type = elem->type();
       if (elem->id() != e && (!has_warned_remapping))
       {
         mooseWarning("AssignElementSubdomainID will ignore the element remapping");

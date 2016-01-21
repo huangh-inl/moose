@@ -19,6 +19,8 @@
 #include "AllLocalDofIndicesThread.h"
 #include "Output.h"
 #include "Console.h"
+#include "Transient.h"
+#include "MooseMesh.h"
 
 // libMesh includes
 #include "libmesh/mesh_tools.h"
@@ -71,6 +73,10 @@ TransientMultiApp::TransientMultiApp(const InputParameters & parameters):
   // Transfer interpolation only makes sense for sub-cycling solves
   if (_interpolate_transfers && !_sub_cycling)
     mooseError("MultiApp " << name() << " is set to interpolate_transfers but is not sub_cycling!  That is not valid!");
+
+  // Subcycling overrides catch up, we don't want to confuse users by allowing them to set both.
+  if (_sub_cycling && _catch_up)
+    mooseError("MultiApp " << name() << " sub_cycling and catch_up cannot both be set to true simultaneously.");
 }
 
 TransientMultiApp::~TransientMultiApp()
@@ -98,9 +104,9 @@ TransientMultiApp::appTransferVector(unsigned int app, std::string var_name)
     _transferred_vars.push_back(var_name);
 
   if (_interpolate_transfers)
-    return appProblem(app)->getAuxiliarySystem().system().get_vector("transfer");
+    return appProblem(app).getAuxiliarySystem().system().get_vector("transfer");
 
-  return appProblem(app)->getAuxiliarySystem().solution();
+  return appProblem(app).getAuxiliarySystem().solution();
 }
 
 void
@@ -151,7 +157,7 @@ TransientMultiApp::solveStep(Real dt, Real target_time, bool auto_advance)
     for (unsigned int i=0; i<_my_num_apps; i++)
     {
 
-      FEProblem * problem = appProblem(_first_local_app + i);
+      FEProblem & problem = appProblem(_first_local_app + i);
 
       Transient * ex = _transient_executioners[i];
 
@@ -167,7 +173,7 @@ TransientMultiApp::solveStep(Real dt, Real target_time, bool auto_advance)
 
         if (_interpolate_transfers)
         {
-          AuxiliarySystem & aux_system = problem->getAuxiliarySystem();
+          AuxiliarySystem & aux_system = problem.getAuxiliarySystem();
           System & libmesh_aux_system = aux_system.system();
 
           NumericVector<Number> & solution = *libmesh_aux_system.solution;
@@ -182,15 +188,15 @@ TransientMultiApp::solveStep(Real dt, Real target_time, bool auto_advance)
 
           // Snag all of the local dof indices for all of these variables
           AllLocalDofIndicesThread aldit(libmesh_aux_system, _transferred_vars);
-          ConstElemRange & elem_range = *problem->mesh().getActiveLocalElementRange();
+          ConstElemRange & elem_range = *problem.mesh().getActiveLocalElementRange();
           Threads::parallel_reduce(elem_range, aldit);
 
           _transferred_dofs = aldit._all_dof_indices;
         }
 
         // Disable/enable output for sub cycling
-        problem->allowOutput(_output_sub_cycles); // disables all outputs, including console
-        problem->allowOutput<Console>(_print_sub_cycles); // re-enables Console to print, if desired
+        problem.allowOutput(_output_sub_cycles); // disables all outputs, including console
+        problem.allowOutput<Console>(_print_sub_cycles); // re-enables Console to print, if desired
 
         ex->setTargetTime(target_time-app_time_offset);
 
@@ -199,7 +205,7 @@ TransientMultiApp::solveStep(Real dt, Real target_time, bool auto_advance)
         bool at_steady = false;
 
         if (_first && !_app.isRecovering())
-          problem->advanceState();
+          problem.advanceState();
 
         // Now do all of the solves we need
         while (true)
@@ -225,8 +231,8 @@ TransientMultiApp::solveStep(Real dt, Real target_time, bool auto_advance)
             Real one_minus_step_percent = 1.0 - step_percent;
 
             // Do the interpolation for each variable that was transferred to
-            FEProblem * problem = appProblem(_first_local_app + i);
-            AuxiliarySystem & aux_system = problem->getAuxiliarySystem();
+            FEProblem & problem = appProblem(_first_local_app + i);
+            AuxiliarySystem & aux_system = problem.getAuxiliarySystem();
             System & libmesh_aux_system = aux_system.system();
 
             NumericVector<Number> & solution = *libmesh_aux_system.solution;
@@ -281,7 +287,7 @@ TransientMultiApp::solveStep(Real dt, Real target_time, bool auto_advance)
             at_steady = true;
 
             // Indicate that the next output call (occurs in ex->endStep()) should output, regardless of intervals etc...
-            problem->forceOutput();
+            problem.forceOutput();
 
             // Clean up the end
             ex->endStep(target_time-app_time_offset);
@@ -296,7 +302,7 @@ TransientMultiApp::solveStep(Real dt, Real target_time, bool auto_advance)
 
         // If we were looking for a steady state, but didn't reach one, we still need to output one more time, regardless of interval
         if (!at_steady)
-          problem->outputStep(EXEC_FORCED);
+          problem.outputStep(EXEC_FORCED);
 
       } // sub_cycling
       else if (_tolerate_failure)
@@ -310,14 +316,14 @@ TransientMultiApp::solveStep(Real dt, Real target_time, bool auto_advance)
         _console << "Solving Normal Step!" << std::endl;
 
         if (_first)
-          problem->advanceState();
+          problem.advanceState();
 
         if (auto_advance)
           if (_first != true)
             ex->incrementStepOrReject();
 
         if (auto_advance)
-          problem->allowOutput(true);
+          problem.allowOutput(true);
 
         ex->takeStep(dt);
 
@@ -352,7 +358,7 @@ TransientMultiApp::solveStep(Real dt, Real target_time, bool auto_advance)
                 {
                   if (ex->getTime() + app_time_offset + ex->timestepTol()*std::abs(ex->getTime()) >= target_time)
                   {
-                    problem->outputStep(EXEC_FORCED);
+                    problem.outputStep(EXEC_FORCED);
                     caught_up = true;
                   }
                 }
@@ -376,7 +382,7 @@ TransientMultiApp::solveStep(Real dt, Real target_time, bool auto_advance)
       }
 
       // Re-enable all output (it may of been disabled by sub-cycling)
-      problem->allowOutput(true);
+      problem.allowOutput(true);
 
     }
 
@@ -472,10 +478,10 @@ TransientMultiApp::resetApp(unsigned int global_app, Real /*time*/)  // FIXME: N
 
     // Setup the app, disable the output so that the initial condition does not output
     // When an app is reset the initial condition was effectively already output before reset
-    FEProblem * problem = appProblem(local_app );
-    problem->allowOutput(false);
+    FEProblem & problem = appProblem(local_app );
+    problem.allowOutput(false);
     setupApp(local_app, time);
-    problem->allowOutput(true);
+    problem.allowOutput(true);
 
     // Swap back
     Moose::swapLibMeshComm(swapped);
@@ -491,7 +497,7 @@ TransientMultiApp::setupApp(unsigned int i, Real /*time*/)  // FIXME: Should we 
     mooseError("MultiApp " << name() << " is not using a Transient Executioner!");
 
   // Get the FEProblem for the current MultiApp
-  FEProblem * problem = appProblem(_first_local_app + i);
+  FEProblem & problem = appProblem(_first_local_app + i);
 
   // Update the file numbers for the outputs from the parent application
   app->getOutputWarehouse().setFileNumbers(_app.getOutputFileNumbers());
@@ -501,7 +507,7 @@ TransientMultiApp::setupApp(unsigned int i, Real /*time*/)  // FIXME: Should we 
 
   if (_interpolate_transfers)
   {
-    AuxiliarySystem & aux_system = problem->getAuxiliarySystem();
+    AuxiliarySystem & aux_system = problem.getAuxiliarySystem();
     System & libmesh_aux_system = aux_system.system();
 
     // We'll store a copy of the auxiliary system's solution at the old time in here
@@ -512,6 +518,6 @@ TransientMultiApp::setupApp(unsigned int i, Real /*time*/)  // FIXME: Should we 
   }
 
   ex->preExecute();
-  problem->advanceState();
+  problem.advanceState();
   _transient_executioners[i] = ex;
 }

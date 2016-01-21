@@ -15,12 +15,17 @@
 #ifndef POSTPROCESSORWAREHOUSE_H
 #define POSTPROCESSORWAREHOUSE_H
 
+// MOOSE includes
+#include "Warehouse.h"
+#include "MooseTypes.h"
+#include "Postprocessor.h"
+
+// C++ includes
 #include <vector>
 #include <map>
 #include <set>
-#include "Warehouse.h"
 
-class Postprocessor;
+// Forward declarations
 class ElementPostprocessor;
 class InternalSidePostprocessor;
 class NodalPostprocessor;

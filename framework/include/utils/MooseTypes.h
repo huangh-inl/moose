@@ -46,9 +46,42 @@ typedef std::vector<Real>        VectorPostprocessorValue;
 typedef boundary_id_type         BoundaryID;
 typedef subdomain_id_type        SubdomainID;
 typedef unsigned int             MooseObjectID;
+typedef unsigned int             THREAD_ID;
+
 
 typedef StoredRange<std::vector<dof_id_type>::iterator, dof_id_type> NodeIdRange;
 typedef StoredRange<std::vector<const Elem *>::iterator, const Elem *> ConstElemPointerRange;
+
+/// Execution flags - when is the object executed/evaluated
+// Note: If this enum is changed, make sure to modify:
+//   (1) the local function populateExecTypes in Moose.C.
+//   (2) the function in Conversion.C: initExecStoreType()
+//   (3) the method SetupInterface::getExecuteOptions
+//   (4) the function Output::getExecuteOptions
+enum ExecFlagType {
+  EXEC_NONE              = 0x00, // 0
+  /// Object is evaluated only once at the beginning of the simulation
+  EXEC_INITIAL           = 0x01, // 1
+  /// Object is evaluated in every residual computation
+  EXEC_LINEAR            = 0x02, // 2
+  /// Object is evaluated in every jacobian computation
+  EXEC_NONLINEAR         = 0x04, // 4
+  /// Object is evaluated at the end of every time step
+  EXEC_TIMESTEP_END      = 0x08, // 8
+  /// Object is evaluated at the beginning of every time step
+  EXEC_TIMESTEP_BEGIN    = 0x10, // 16
+  /// Object is evaluated at the end of the simulations (output only)
+  EXEC_FINAL             = 0x20, // 32
+  /// Forces execution to occur (output only)
+  EXEC_FORCED            = 0x40, // 64
+  /// Forces execution on failed solve (output only)
+  EXEC_FAILED            = 0x80, // 128
+  /// For use with custom executioners that want to fire objects at a specific time
+  EXEC_CUSTOM            = 0x100, // 256
+  /// Objects is evaluated on subdomain
+  EXEC_SUBDOMAIN         = 0x200  // 512
+};
+
 
 namespace Moose
 {
@@ -57,6 +90,23 @@ const SubdomainID INVALID_BLOCK_ID = libMesh::Elem::invalid_subdomain_id;
 const BoundaryID ANY_BOUNDARY_ID = static_cast<BoundaryID>(-1);
 const BoundaryID INVALID_BOUNDARY_ID = libMesh::BoundaryInfo::invalid_id;
 
+/**
+ * MaterialData types
+ *
+ * @see FEProblem, MaterialPropertyInterface
+ */
+enum MaterialDataType {
+  BLOCK_MATERIAL_DATA,
+  BOUNDARY_MATERIAL_DATA,
+  FACE_MATERIAL_DATA,
+  NEIGHBOR_MATERIAL_DATA
+};
+
+
+/**
+ * A static list of all the exec types.
+ */
+extern const std::vector<ExecFlagType> exec_types;
 
 /**
  * Framework-wide stuff
@@ -72,15 +122,6 @@ enum KernelType
   KT_TIME = 0,
   KT_NONTIME = 1,
   KT_ALL
-};
-
-// Bit mask flags to be able to combine them through or-operator (|)
-enum PostprocessorType
-{
-  PPS_RESIDUAL = 0x01,
-  PPS_JACOBIAN = 0x02,
-  PPS_TIMESTEP = 0x04,
-  PPS_NEWTONIT = 0x08
 };
 
 enum CouplingType
@@ -131,15 +172,6 @@ enum CoordinateSystemType
   COORD_RSPHERICAL
 };
 
-enum PPSOutputType
-{
-  PPS_OUTPUT_NONE,
-  PPS_OUTPUT_AUTO,
-  PPS_OUTPUT_SCREEN,
-  PPS_OUTPUT_FILE,
-  PPS_OUTPUT_BOTH
-};
-
 /**
  * Preconditioning side
  */
@@ -162,6 +194,14 @@ enum SolveType
   ST_LINEAR            ///< Solving a linear problem
 };
 
+/**
+ * Type of constraint formulation
+ */
+enum ConstraintFormulationType
+{
+  Penalty,
+  Kinematic
+};
 /**
  * Type of the line search
  */

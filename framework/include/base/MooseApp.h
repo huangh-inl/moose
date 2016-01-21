@@ -15,32 +15,33 @@
 #ifndef MOOSEAPP_H
 #define MOOSEAPP_H
 
-#include <iostream>
-#include <vector>
-#include <map>
-#include <set>
-
+// MOOSE includes
 #include "Moose.h"
 #include "Parser.h"
-#include "MooseSyntax.h"
 #include "ActionWarehouse.h"
-#include "SystemInfo.h"
 #include "Factory.h"
 #include "ActionFactory.h"
 #include "OutputWarehouse.h"
-#include "InputParameterWarehouse.h"
 #include "RestartableData.h"
 #include "ConsoleStreamInterface.h"
 
 // libMesh includes
 #include "libmesh/parallel_object.h"
 
+// C++ includes
+#include <list>
+#include <map>
+#include <set>
+
+// Forward declarations
 class Executioner;
 class MooseApp;
-class RecoverBaseAction;
 class Backup;
 class FEProblem;
 class MeshModifier;
+class InputParameterWarehouse;
+class SystemInfo;
+class CommandLine;
 
 template<>
 InputParameters validParams<MooseApp>();
@@ -135,6 +136,12 @@ public:
    * Tell the app to output in a specific position.
    */
   void setOutputPosition(Point p);
+
+  /**
+   * Extract all possible checkpoint file names
+   * @param files A Set of checkpoint filenames to populate
+   */
+  std::list<std::string> getCheckpointFiles();
 
   /**
    * Whether or not an output position has been set.
@@ -420,9 +427,19 @@ public:
   bool isUltimateMaster() { return !_multiapp_level; }
 
   /**
-   * Add a Mesh modifier that will act on the meshes in the system
+   * Add a mesh modifier that will act on the meshes in the system
    */
   void addMeshModifier(const std::string & modifier_name, const std::string & name, InputParameters parameters);
+
+  /**
+   * Get a mesh modifer with its name
+   */
+  const MeshModifier & getMeshModifier(const std::string & name) const;
+
+  /**
+   * Clear all mesh modifers
+   */
+  void clearMeshModifiers();
 
   /**
    * Execute and clear the Mesh Modifiers data structure

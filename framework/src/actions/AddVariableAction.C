@@ -23,6 +23,7 @@
 #include "MooseEnum.h"
 #include "EigenSystem.h"
 #include "MooseObjectAction.h"
+#include "MooseMesh.h"
 
 // libMesh includes
 #include "libmesh/libmesh.h"
@@ -83,7 +84,7 @@ void
 AddVariableAction::act()
 {
   // Get necessary data for creating a variable
-  std::string var_name = getShortName();
+  std::string var_name = name();
   addVariable(var_name);
 
   // Set the initial condition
@@ -95,10 +96,10 @@ void
 AddVariableAction::createInitialConditionAction()
 {
   // Variable name
-  std::string var_name = getShortName();
+  std::string var_name = name();
 
   // Create the object name
-  std::string long_name("ICs/");
+  std::string long_name("");
   long_name += var_name;
   long_name += "_moose";
 
@@ -160,4 +161,3 @@ AddVariableAction::getSubdomainIDs()
   }
   return blocks;
 }
-

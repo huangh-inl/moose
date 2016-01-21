@@ -12,8 +12,10 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
+// MOOSE includes
 #include "AddElementalFieldAction.h"
 #include "FEProblem.h"
+#include "MooseMesh.h"
 
 // libmesh includes
 #include "libmesh/fe.h"
@@ -45,11 +47,10 @@ AddElementalFieldAction::act()
 
   FEType fe_type(CONSTANT, MONOMIAL);
 
-  std::string variable = getShortName();
+  std::string variable = name();
 
   if (blocks.empty())
     _problem->addAuxVariable(variable, fe_type);
   else
     _problem->addAuxVariable(variable, fe_type, &blocks);
 }
-

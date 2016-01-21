@@ -15,13 +15,18 @@
 #include "Damper.h"
 #include "SystemBase.h"
 #include "SubProblem.h"
+#include "Assembly.h"
+
+// libMesh includes
+#include "libmesh/quadrature.h"
 
 template<>
 InputParameters validParams<Damper>()
 {
   InputParameters params = validParams<MooseObject>();
+  params += validParams<MaterialPropertyInterface>();
   params.addRequiredParam<NonlinearVariableName>("variable", "The name of the variable that this damper operates on");
-
+  params.declareControllable("enable"); // allows Control to enable/disable this type of object
   params.registerBase("Damper");
   return params;
 }
@@ -66,4 +71,3 @@ Damper::computeDamping()
 
   return damping;
 }
-

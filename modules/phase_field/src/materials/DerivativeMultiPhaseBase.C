@@ -15,7 +15,7 @@ InputParameters validParams<DerivativeMultiPhaseBase>()
   params.addRequiredParam<std::vector<MaterialPropertyName> >("fi_names", "List of free energies for the n phases");
   params.addParam<std::vector<MaterialPropertyName> >("hi_names", "Switching Function Materials that provide h(eta_i)");
 
-  // All arguments to the phase free energies
+  // All arguments of the phase free energies
   params.addCoupledVar("args", "Arguments of the fi free energies - use vector coupling");
   params.addCoupledVar("displacement_gradients", "Vector of displacement gradient variables (see Modules/PhaseField/DisplacementGradients action)");
 
@@ -59,8 +59,7 @@ DerivativeMultiPhaseBase::DerivativeMultiPhaseBase(const InputParameters & param
 
     // for each coupled variable we need to know if it was coupled through "etas"
     // and - if so - which coupled component of "etas" it comes from
-    if (_eta_vars[i] < _number_of_nl_variables)
-      _eta_index[argIndex(_eta_vars[i])] = i;
+    _eta_index[argIndex(_eta_vars[i])] = i;
 
     // barrier function derivatives
     _dg[i] = &getMaterialPropertyDerivative<Real>("g", _eta_names[i]);

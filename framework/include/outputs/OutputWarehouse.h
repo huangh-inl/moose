@@ -15,17 +15,13 @@
 #ifndef OUTPUTWAREHOUSE_H
 #define OUTPUTWAREHOUSE_H
 
-// Standard includes
-#include <vector>
-
 // MOOSE includes
 #include "Output.h"
 #include "Warehouse.h"
-#include "InputParameters.h"
 
 // Forward declarations
-class Checkpoint;
 class FEProblem;
+class InputParameters;
 
 /**
  * Class for storing and utilizing output objects
@@ -37,7 +33,7 @@ public:
   /**
    * Class constructor
    */
-  OutputWarehouse();
+  OutputWarehouse(MooseApp & app);
 
   /*
    * Class destructor
@@ -52,12 +48,6 @@ public:
    * add using this method
    */
   void addOutput(MooseSharedPointer<Output> & output);
-
-  /**
-   * Get a complete list of all output objects
-   * @return A vector of pointers to each of the output objects
-   */
-  const std::vector<Output *> & getOutputs() const;
 
   /**
    * Get a complete set of all output object names
@@ -187,6 +177,11 @@ public:
    */
   std::ostringstream & consoleBuffer() { return _console_buffer; }
 
+  /**
+   * Set if the outputs to Console before its construction are to be buffered or to screen directly
+   * @param buffer Ture to buffer
+   */
+  void bufferConsoleOutputsBeforeConstruction(bool buffer) { _buffer_action_console_outputs = buffer; }
 
 private:
 
@@ -289,6 +284,12 @@ private:
    * before buffered content. It is private because people shouldn't be messing with it.
    */
   void flushConsoleBuffer();
+
+  /// MooseApp
+  MooseApp & _app;
+
+  /// True to buffer console outputs in actions
+  bool _buffer_action_console_outputs;
 
   /// A map of the output pointers
   std::map<OutputName, Output *> _object_map;

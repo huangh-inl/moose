@@ -38,7 +38,7 @@ public:
   virtual void execute();
 
   /**
-   * Accessor for retrieving nodal field information (unique grains or variable indicies)
+   * Accessor for retrieving nodal field information (unique grains or variable indices)
    * @param node_id the node identifier for which to retrieve field data
    * @param var_idx when using multi-map mode, the map number from which to retrieve data.
    * @param show_var_coloring pass true to view variable index for a region, false for unique grain information
@@ -60,7 +60,7 @@ public:
    * @param element_id the element identifier for which to retrieve field data
    * @return the elemental value
    */
-  virtual Real getElementalValue(dof_id_type element_id) const;
+  virtual Real getElementalValue(dof_id_type /*element_id*/) const;
 
   /**
    * Returns a list of active unique grains for a particular elem based on the node numbering.  The outer vector

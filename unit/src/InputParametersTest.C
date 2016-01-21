@@ -43,8 +43,8 @@ InputParametersTest::checkControlParamTypeError()
   try
   {
     InputParameters params = emptyInputParameters();
-    params.addParam<PostprocessorName>("name", "make_it_valid", "Some doc");
-    params.declareControllable("name");
+    params.addParam<PostprocessorName>("pp_name", "make_it_valid", "Some doc");
+    params.declareControllable("pp_name");
     params.checkParams("");
     CPPUNIT_ASSERT( false ); // shouldn't get here
   }
@@ -69,5 +69,21 @@ InputParametersTest::checkControlParamValidError()
   {
     std::string msg(e.what());
     CPPUNIT_ASSERT( msg.find("The parameter 'not_valid'") != std::string::npos );
+  }
+}
+
+void
+InputParametersTest::checkSuppressedError()
+{
+  try
+  {
+    InputParameters params = emptyInputParameters();
+    params.suppressParameter<int>("nonexistent");
+    CPPUNIT_ASSERT( false ); // shouldn't get here
+  }
+  catch(const std::exception & e)
+  {
+    std::string msg(e.what());
+    CPPUNIT_ASSERT( msg.find("Unable to suppress nonexistent parameter") != std::string::npos );
   }
 }

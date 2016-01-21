@@ -7,6 +7,7 @@
 #include "PhaseFieldApp.h"
 #include "Moose.h"
 #include "AppFactory.h"
+#include "MooseSyntax.h"
 
 /*
  * Kernels
@@ -16,9 +17,9 @@
 #include "ACGrGrPoly.h"
 #include "ACInterface.h"
 #include "ACMultiInterface.h"
-#include "ACParsed.h"
 #include "ACInterfaceKobayashi1.h"
 #include "ACInterfaceKobayashi2.h"
+#include "AllenCahn.h"
 #include "CahnHilliard.h"
 #include "CahnHilliardAniso.h"
 #include "CHBulkPFCTrad.h"
@@ -30,7 +31,8 @@
 #include "CHSplitVar.h"
 #include "CoefCoupledTimeDerivative.h"
 #include "ConservedLangevinNoise.h"
-#include "CoupledTimeDerivative.h"
+#include "CoupledAllenCahn.h"
+#include "CoupledReaction.h"
 #include "GradientComponent.h"
 #include "HHPFCRFF.h"
 #include "KKSACBulkC.h"
@@ -41,6 +43,7 @@
 #include "KKSSplitCHCRes.h"
 #include "LangevinNoise.h"
 #include "MaskedBodyForce.h"
+#include "MatAnisoDiffusion.h"
 #include "MatDiffusion.h"
 #include "MultiGrainRigidBodyMotion.h"
 #include "PFFracBulkRate.h"
@@ -67,6 +70,8 @@
 #include "PFCFreezingIC.h"
 #include "PolycrystalRandomIC.h"
 #include "PolycrystalReducedIC.h"
+#include "RampIC.h"
+#include "ReconPhaseVarIC.h"
 #include "ReconVarIC.h"
 #include "RndBoundingBoxIC.h"
 #include "RndSmoothCircleIC.h"
@@ -111,6 +116,7 @@
 #include "PFMobility.h"
 #include "PFParamsPolyFreeEnergy.h"
 #include "PolynomialFreeEnergy.h"
+#include "RegularSolutionFreeEnergy.h"
 #include "StrainGradDispDerivatives.h"
 #include "SwitchingFunctionMaterial.h"
 #include "CrossTermBarrierFunctionMaterial.h"
@@ -140,7 +146,6 @@
 /*
  * Functions
  */
-#include "ImageFunction.h"
 
 /*
  * User Objects
@@ -164,7 +169,6 @@
  * Meshes
  */
 #include "EBSDMesh.h"
-#include "ImageMesh.h"
 
 /*
  * Actions
@@ -235,9 +239,9 @@ PhaseFieldApp::registerObjects(Factory & factory)
   registerKernel(ACGrGrPoly);
   registerKernel(ACInterface);
   registerKernel(ACMultiInterface);
-  registerKernel(ACParsed);
   registerKernel(ACInterfaceKobayashi1);
   registerKernel(ACInterfaceKobayashi2);
+  registerKernel(AllenCahn);
   registerKernel(CahnHilliard);
   registerKernel(CahnHilliardAniso);
   registerKernel(CHBulkPFCTrad);
@@ -249,6 +253,8 @@ PhaseFieldApp::registerObjects(Factory & factory)
   registerKernel(CHSplitVar);
   registerKernel(CoefCoupledTimeDerivative);
   registerKernel(ConservedLangevinNoise);
+  registerKernel(CoupledAllenCahn);
+  registerKernel(CoupledReaction);
   registerKernel(GradientComponent);
   registerKernel(HHPFCRFF);
   registerKernel(KKSACBulkC);
@@ -259,6 +265,7 @@ PhaseFieldApp::registerObjects(Factory & factory)
   registerKernel(KKSSplitCHCRes);
   registerKernel(LangevinNoise);
   registerKernel(MaskedBodyForce);
+  registerKernel(MatAnisoDiffusion);
   registerKernel(MatDiffusion);
   registerKernel(MultiGrainRigidBodyMotion);
   registerKernel(PFFracBulkRate);
@@ -273,8 +280,8 @@ PhaseFieldApp::registerObjects(Factory & factory)
   registerKernel(SwitchingFunctionConstraintEta);
   registerKernel(SwitchingFunctionConstraintLagrange);
   registerKernel(SwitchingFunctionPenalty);
+  registerDeprecatedObjectName(AllenCahn, "ACParsed", "15/04/2016 00:00");
   registerDeprecatedObjectName(CahnHilliard, "CHParsed", "11/01/2015 00:00");
-  registerDeprecatedObjectName(CoupledTimeDerivative, "CoupledImplicitEuler", "09/01/2015 00:00");
 
   registerInitialCondition(ClosePackIC);
   registerInitialCondition(CrossIC);
@@ -284,6 +291,8 @@ PhaseFieldApp::registerObjects(Factory & factory)
   registerInitialCondition(PFCFreezingIC);
   registerInitialCondition(PolycrystalRandomIC);
   registerInitialCondition(PolycrystalReducedIC);
+  registerInitialCondition(RampIC);
+  registerInitialCondition(ReconPhaseVarIC);
   registerInitialCondition(ReconVarIC);
   registerInitialCondition(RndBoundingBoxIC);
   registerInitialCondition(RndSmoothCircleIC);
@@ -321,10 +330,10 @@ PhaseFieldApp::registerObjects(Factory & factory)
   registerMaterial(PFFracBulkRateMaterial);
   registerMaterial(PFParamsPolyFreeEnergy);
   registerMaterial(PolynomialFreeEnergy);
+  registerMaterial(RegularSolutionFreeEnergy);
   registerMaterial(StrainGradDispDerivatives);
   registerMaterial(SwitchingFunctionMaterial);
   registerMaterial(CrossTermBarrierFunctionMaterial);
-  registerDeprecatedObjectName(PFMobility, "PFMobility", "09/26/2015 00:00");
 
   registerPostprocessor(FeatureFloodCount);
   registerPostprocessor(GrainTracker);
@@ -357,13 +366,10 @@ PhaseFieldApp::registerObjects(Factory & factory)
   registerUserObject(EBSDReader);
   registerUserObject(SolutionRasterizer);
 
-  registerFunction(ImageFunction);
-
   registerVectorPostprocessor(GrainCentersPostprocessor);
   registerVectorPostprocessor(GrainForcesPostprocessor);
 
   registerMesh(EBSDMesh);
-  registerMesh(ImageMesh);
 }
 
 // External entry point for dynamic syntax association

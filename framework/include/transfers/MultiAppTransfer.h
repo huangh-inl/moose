@@ -15,12 +15,17 @@
 #ifndef MULTIAPPTRANSFER_H
 #define MULTIAPPTRANSFER_H
 
+// MOOSE includes
 #include "Transfer.h"
-#include "MultiApp.h"
 #include "MooseEnum.h"
-#include "MooseTypes.h"
 
+// libMesh includes
+#include "libmesh/mesh_tools.h"
+
+// Forward declarations
 class MultiAppTransfer;
+class MooseMesh;
+class MultiApp;
 
 template<>
 InputParameters validParams<MultiAppTransfer>();
@@ -28,10 +33,11 @@ InputParameters validParams<MultiAppTransfer>();
 /**
  * Base class for all MultiAppTransfer objects.
  *
- * MultiAppTransfers are objects that push and pull values to and from MultiApp objects
- * from and to the main (master) system.
+ * MultiAppTransfers are objects that push and pull values to and from
+ * MultiApp objects from and to the main (master) system.
  *
- * Classes that inherit from this class still need to override the execute() method from Transfer.
+ * Classes that inherit from this class still need to override the
+ * execute() method from Transfer.
  */
 class MultiAppTransfer : public Transfer
 {
@@ -57,11 +63,15 @@ public:
   void variableIntegrityCheck(const AuxVariableName & var_name) const;
 
   /// Return the MultiApp that this transfer belongs to
-  const MultiApp * getMultiApp() const { return _multi_app; }
+  const MooseSharedPointer<MultiApp> getMultiApp() const { return _multi_app; }
+
+  /// Return the execution flags, handling "same_as_multiapp"
+  virtual const std::vector<ExecFlagType> & execFlags() const;
+
 
 protected:
   /// The MultiApp this Transfer is transferring data to or from
-  MultiApp * _multi_app;
+  MooseSharedPointer<MultiApp> _multi_app;
 
   /// Whether we're transferring to or from the MultiApp
   MooseEnum _direction;

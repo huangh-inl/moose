@@ -4,7 +4,11 @@
 /*          All contents are licensed under LGPL V2.1           */
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
+
 #include "ComputeSmallStrain.h"
+
+// libmesh includes
+#include "libmesh/quadrature.h"
 
 template<>
 InputParameters validParams<ComputeSmallStrain>()
@@ -33,10 +37,12 @@ ComputeSmallStrain::computeProperties()
 
     _total_strain[_qp] = ( grad_tensor + grad_tensor.transpose() )/2.0;
 
+    _mechanical_strain[_qp] = _total_strain[_qp];
+
     //Remove thermal expansion
-    _total_strain[_qp].addIa(-_thermal_expansion_coeff*( _T[_qp] - _T0 ));
+    _mechanical_strain[_qp].addIa(-_thermal_expansion_coeff*( _T[_qp] - _T0 ));
 
     //Remove the Eigen strain
-    _total_strain[_qp] -= _stress_free_strain[_qp];
+    _mechanical_strain[_qp] -= _stress_free_strain[_qp];
   }
 }

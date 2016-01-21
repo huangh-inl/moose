@@ -15,6 +15,7 @@
 // Moose
 #include "FindContactPoint.h"
 #include "LineSegment.h"
+#include "PenetrationInfo.h"
 
 // libMesh
 #include "libmesh/boundary_info.h"
@@ -24,6 +25,8 @@
 #include "libmesh/dense_matrix.h"
 #include "libmesh/dense_vector.h"
 #include "libmesh/fe_base.h"
+#include "libmesh/vector_value.h"
+
 
 namespace Moose
 {
@@ -219,7 +222,8 @@ findContactPoint(PenetrationInfo & p_info,
   else
   {
     p_info._normal = RealGradient(dxyz_dxi[0](1),-dxyz_dxi[0](0));
-    p_info._normal /= p_info._normal.size();
+    if (std::fabs(p_info._normal.size()) > 1e-15)
+      p_info._normal /= p_info._normal.size();
   }
 
   // If the point has not penetrated the face, make the distance negative

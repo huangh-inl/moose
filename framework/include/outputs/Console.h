@@ -17,7 +17,6 @@
 
 // MOOSE includes
 #include "TableOutput.h"
-#include "FormattedTable.h"
 
 // Forward declarations
 class Console;
@@ -77,6 +76,16 @@ public:
    * Performs console related printing when the mesh is changed
    */
   void meshChanged();
+
+  /**
+   * Return system information flags
+   */
+  MultiMooseEnum & systemInfoFlags()
+    {
+      if (!_allow_changing_sysinfo_flag)
+        mooseError("accessing console system information flags is not allowed after console initial setup");
+      return _system_info_flags;
+    }
 
 protected:
 
@@ -230,6 +239,10 @@ private:
   MultiMooseEnum _system_info_flags;
 
   friend class OutputWarehouse;
+
+private:
+  /// A boolean for protecting _system_info_flags from being changed undesirably
+  bool _allow_changing_sysinfo_flag;
 };
 
 #endif /* CONSOLE_H */

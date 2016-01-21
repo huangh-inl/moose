@@ -1,6 +1,5 @@
 [Mesh]
   file = new_dt_out_cp/0010_mesh.cpr
-  distribution = serial
 []
 
 [Variables]
@@ -44,8 +43,6 @@
   dt = 0.25
   start_time = 1.0
 
-  restart_file_base = new_dt_out_cp/0010
-
   solve_type = PJFNK
   petsc_options_iname = '-pc_type -pc_hypre_type'
   petsc_options_value = 'hypre boomeramg'
@@ -56,4 +53,8 @@
     type = Exodus
     execute_on = 'timestep_end final'
   [../]
+[]
+
+[Problem]
+  restart_file_base = new_dt_out_cp/0010
 []

@@ -12,9 +12,6 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
-// STL includes
-#include <ostream>
-
 // MOOSE includes
 #include "ConsoleUtils.h"
 #include "MooseApp.h"
@@ -23,12 +20,20 @@
 #include "Executioner.h"
 #include "Conversion.h"
 #include "OutputWarehouse.h"
+#include "MooseMesh.h"
+#include "NonlinearSystem.h"
 
 // libMesh includes
 #include "libmesh/string_to_enum.h"
 
 namespace ConsoleUtils
 {
+
+std::string
+indent(unsigned int spaces)
+{
+  return std::string(spaces, ' ');
+}
 
 
 std::string
@@ -257,7 +262,7 @@ outputOutputInformation(MooseApp & app)
 }
 
 
-std::string outputLegacyInformation(MooseApp & app, FEProblem & problem)
+std::string outputLegacyInformation(MooseApp & /*app*/, FEProblem & problem)
 {
   std::stringstream oss;
   oss << std::left;

@@ -15,17 +15,17 @@
 #ifndef GENERALUSEROBJECT_H
 #define GENERALUSEROBJECT_H
 
+// MOOSE includes
 #include "UserObject.h"
+#include "MaterialPropertyInterface.h"
 #include "TransientInterface.h"
 #include "DependencyResolverInterface.h"
 #include "UserObjectInterface.h"
 #include "PostprocessorInterface.h"
 #include "VectorPostprocessorInterface.h"
 #include "MaterialPropertyInterface.h"
-#include "Problem.h"
 
-
-//Forward Declarations
+// Forward Declarations
 class GeneralUserObject;
 
 template<>
@@ -62,8 +62,6 @@ public:
   /**
    * Store dependency among same object types for proper execution order
    */
-
-  // FIXME: This should be const but fails to work when it is const
   virtual const PostprocessorValue & getPostprocessorValue(const std::string & name);
   virtual const PostprocessorValue & getPostprocessorValueByName(const PostprocessorName & name);
 

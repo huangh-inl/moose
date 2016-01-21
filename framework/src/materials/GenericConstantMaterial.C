@@ -14,6 +14,9 @@
 
 #include "GenericConstantMaterial.h"
 
+// libMesh includes
+#include "libmesh/quadrature.h"
+
 template<>
 InputParameters validParams<GenericConstantMaterial>()
 {
@@ -48,4 +51,3 @@ GenericConstantMaterial::computeQpProperties()
   for (unsigned int i=0; i<_num_props; i++)
     (*_properties[i])[_qp] = _prop_values[i];
 }
-

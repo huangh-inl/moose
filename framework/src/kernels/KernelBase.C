@@ -30,6 +30,7 @@ InputParameters validParams<KernelBase>()
   params += validParams<BlockRestrictable>();
   params += validParams<RandomInterface>();
   params += validParams<MeshChangedInterface>();
+  params += validParams<MaterialPropertyInterface>();
 
   params.addRequiredParam<NonlinearVariableName>("variable", "The name of the variable that this Kernel operates on");
   params.addParam<std::vector<AuxVariableName> >("save_in", "The name of auxiliary variables to save this Kernel's residual contributions to.  Everything about that variable must match everything about this variable (the type, what blocks it's on, etc.)");
@@ -40,6 +41,7 @@ InputParameters validParams<KernelBase>()
 
   params.addParamNamesToGroup("diag_save_in save_in", "Advanced");
 
+  params.declareControllable("enable");
   return params;
 }
 
@@ -129,4 +131,3 @@ KernelBase::subProblem()
 {
   return _subproblem;
 }
-

@@ -19,22 +19,17 @@
 #include "MooseObject.h"
 #include "SetupInterface.h"
 #include "ParallelUniqueId.h"
-#include "MooseVariable.h"
 #include "MaterialPropertyInterface.h"
 #include "Restartable.h"
 #include "MeshChangedInterface.h"
-
-// libMesh
-#include "libmesh/elem.h"
-#include "libmesh/quadrature.h"
-#include "libmesh/point.h"
+#include "MooseVariableBase.h"
 
 //Forward Declarations
 class Damper;
-class Problem;
 class SubProblem;
 class SystemBase;
 class MooseVariable;
+class Assembly;
 
 template<>
 InputParameters validParams<Damper>();
@@ -57,6 +52,9 @@ public:
    * Computes this Damper's damping for one element.
    */
   Real computeDamping();
+
+  void printTime();
+
 
 protected:
   /**

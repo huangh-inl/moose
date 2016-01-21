@@ -15,48 +15,48 @@
 #ifndef INPUTPARAMETERS_H
 #define INPUTPARAMETERS_H
 
-#include <vector>
-#include <set>
-#include <map>
-#include <sstream>
-
-// libMesh
-#include "libmesh/parameters.h"
-#include "libmesh/parsed_function.h"
-
+// MOOSE includes
 #include "MooseError.h"
 #include "MooseTypes.h"
 #include "MooseEnum.h"
 #include "MultiMooseEnum.h"
 #include "MooseUtils.h"
 
+// libMesh includes
+#include "libmesh/parameters.h"
+#include "libmesh/parsed_function.h"
+
 #ifdef LIBMESH_HAVE_FPARSER
-#include "libmesh/fparser.hh"
+#  include "libmesh/fparser.hh"
 #else
 template <typename T>
 class FunctionParserBase
 {};
 #endif
 
+// Forward declarations
 class MooseObject;
-class GlobalParamsAction;
 class Action;
-class Parser;
 class Problem;
 class MooseApp;
 class InputParameters;
 
+/**
+ * This is the templated validParams() function that every
+ * MooseObject-derived class is required to specialize.
+ */
 template<class T>
 InputParameters validParams();
 
 /**
- *
+ * The main MOOSE class responsible for handling user-defined
+ * parameters in almost every MOOSE system.
  */
 class InputParameters : public Parameters
 {
 public:
-  InputParameters(const InputParameters &rhs);
-  InputParameters(const Parameters &rhs);
+  InputParameters(const InputParameters & rhs);
+  InputParameters(const Parameters & rhs);
 
   virtual ~InputParameters();
 
@@ -358,6 +358,11 @@ public:
   void declareControllable(const std::string & name);
 
   /**
+   * Marker a parameter that has been changed by the Control system (this is for output purposes)
+   */
+  void markControlled(const std::string & name);
+
+  /**
    * Returns a Boolean indicating whether the specified parameter is controllable
    */
   bool isControllable(const std::string & name);
@@ -498,10 +503,15 @@ public:
   void applyParameters(const InputParameters & common, std::vector<std::string> exclude = std::vector<std::string>());
 
   /**
+   * Deprecated method.  Use isParamSetByUser() instead.
+   */
+  bool paramSetByUser(const std::string & name) const;
+
+  /**
    * Method returns true if the parameter was by the user
    * @param name The parameter name
    */
-  bool paramSetByUser(const std::string & name) const;
+  bool isParamSetByUser(const std::string & name) const;
 
   ///@{
   /*
@@ -516,6 +526,12 @@ public:
   static
   const std::vector<T> & getParamHelper(const std::string & name, const InputParameters & pars, const std::vector<T>* the_type);
   ///@}
+
+  /**
+   * Return list of controllable parameters
+   */
+  const std::set<std::string> & getControllableParameters() { return _controllable_params; }
+
 
 private:
   // Private constructor so that InputParameters can only be created in certain places.
@@ -930,6 +946,9 @@ template <typename T>
 void
 InputParameters::suppressParameter(const std::string &name)
 {
+  if (!this->have_parameter<T>(name))
+    mooseError("Unable to suppress nonexistent parameter: " << name);
+
   _required_params.erase(name);
   _private_params.insert(name);
 }
@@ -993,6 +1012,17 @@ template <>
 void
 InputParameters::addParam<std::vector<MooseEnum> >(const std::string & /*name*/, const std::string & /*doc_string*/);
 
+template <>
+void
+InputParameters::addDeprecatedParam<MooseEnum>(const std::string &name, const std::string &doc_string, const std::string &deprecation_message);
+
+template <>
+void
+InputParameters::addDeprecatedParam<MultiMooseEnum>(const std::string &name, const std::string &doc_string, const std::string &deprecation_message);
+
+template <>
+void
+InputParameters::addDeprecatedParam<std::vector<MooseEnum> >(const std::string &name, const std::string &doc_string, const std::string &deprecation_message);
 
 // Forward declare specializations for setParamHelper
 template<>

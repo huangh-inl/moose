@@ -125,7 +125,7 @@ InputParameters::operator=(const InputParameters &rhs)
   // An error to help minimize the segmentation faults that occure when MooseObjects do not have the correct constructor
   if (!rhs._allow_copy)
   {
-    const std::string & name = rhs.get<std::string>("name"); // If _allow_parameter_copy is set then so is name (see InputParameterWarehouse::addInputParameters)
+    const std::string & name = rhs.get<std::string>("_object_name"); // If _allow_parameter_copy is set then so is name (see InputParameterWarehouse::addInputParameters)
     mooseError("Copying of the InputParameters object for the " << name << " object is not allowed.\n\nThe likely cause for this error "
                << "is having a constructor that does not use a const reference, all constructors\nfor MooseObject based classes should be as follows:\n\n"
                << "    MyObject::MyObject(const InputParameters & parameters);");
@@ -353,7 +353,7 @@ InputParameters::mooseObjectSyntaxVisibility() const
 void
 InputParameters::checkParams(const std::string & parsing_syntax)
 {
-  std::string l_prefix = this->have_parameter<std::string>("name") ? this->get<std::string>("name") : parsing_syntax;
+  std::string l_prefix = this->have_parameter<std::string>("_object_name") ? this->get<std::string>("_object_name") : parsing_syntax;
 
   std::ostringstream oss;
   // Required parameters
@@ -628,8 +628,16 @@ InputParameters::applyParameters(const InputParameters & common, const std::vect
   _show_deprecated_message = true;
 }
 
+///Deprecated method
 bool
 InputParameters::paramSetByUser(const std::string & name) const
+{
+  mooseDeprecated("paramSetByUser() is deprecated. Use isParamSetByUser() instead.");
+  return isParamSetByUser(name);
+}
+
+bool
+InputParameters::isParamSetByUser(const std::string & name) const
 {
   if (!isParamValid(name))
     // if the parameter is invalid, it is for sure not set by the user
@@ -696,6 +704,26 @@ InputParameters::addParam<std::vector<MooseEnum> >(const std::string & /*name*/,
   mooseError("You must supply a vector of MooseEnum object(s) when using addParam, even if the parameter is not required!");
 }
 
+template <>
+void
+InputParameters::addDeprecatedParam<MooseEnum>(const std::string &name, const std::string &doc_string, const std::string &deprecation_message)
+{
+  mooseError("You must supply a MooseEnum object and the deprecation string when using addDeprecatedParam, even if the parameter is not required!");
+}
+
+template <>
+void
+InputParameters::addDeprecatedParam<MultiMooseEnum>(const std::string &name, const std::string &doc_string, const std::string &deprecation_message)
+{
+  mooseError("You must supply a MultiMooseEnum object and the deprecation string when using addDeprecatedParam, even if the parameter is not required!");
+}
+
+template <>
+void
+InputParameters::addDeprecatedParam<std::vector<MooseEnum> >(const std::string &name, const std::string &doc_string, const std::string &deprecation_message)
+{
+  mooseError("You must supply a vector of MooseEnum object(s) and the deprecation string when using addDeprecatedParam, even if the parameter is not required!");
+}
 
 template<>
 void
