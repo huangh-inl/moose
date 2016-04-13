@@ -8,6 +8,7 @@
 #define COMPUTEELASTICSTRESSWITHSMEAREDCRACKING_H
 
 #include "ComputeStressBase.h"
+#include "Function.h"
 
 /**
  * ComputeElasticStressWithSmearedCracking computes the stress following elasticity theory for finite strains
@@ -40,7 +41,7 @@ protected:
 
   void applyCracksToTensor( RankTwoTensor & tensor, const RealVectorValue & sigma );
   
-//  const MaterialProperty<RankTwoTensor> & _total_strain;
+  const MaterialProperty<RankTwoTensor> & _mechanical_strain;
 
   const bool _is_finite_strain;
 

@@ -44,7 +44,7 @@ namespace
 ComputeElasticStressWithSmearedCracking::ComputeElasticStressWithSmearedCracking(const InputParameters & parameters) :
     ComputeStressBase(parameters),
 
-//    _total_strain(getMaterialPropertyByName<RankTwoTensor>(_base_name + "total_strain")),
+    _mechanical_strain(getMaterialPropertyByName<RankTwoTensor>(_base_name + "mechanical_strain")),
     
     _is_finite_strain(hasMaterialProperty<RankTwoTensor>(_base_name + "strain_increment")),
 
@@ -190,7 +190,7 @@ ComputeElasticStressWithSmearedCracking::computeQpProperties()
 void
 ComputeElasticStressWithSmearedCracking::computeQpStress()
 {
-  _elastic_strain[_qp] = _total_strain[_qp];
+  _elastic_strain[_qp] = _mechanical_strain[_qp];
   
   //update elasticity tensor with old cracking status: crack_flags_old and crack_orientation_old
   updateElasticityTensor();
