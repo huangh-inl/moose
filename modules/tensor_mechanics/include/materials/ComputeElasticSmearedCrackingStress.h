@@ -4,19 +4,20 @@
 /*          All contents are licensed under LGPL V2.1           */
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
-#ifndef COMPUTEELASTICSTRESSWITHSMEAREDCRACKING_H
-#define COMPUTEELASTICSTRESSWITHSMEAREDCRACKING_H
+#ifndef COMPUTEELASTICSMEAREDCRACKINGSTRESS_H
+#define COMPUTEELASTICSMERAEDCRACKINGSTRESS_H
 
 #include "ComputeStressBase.h"
 #include "Function.h"
 
 /**
- * ComputeElasticStressWithSmearedCracking computes the stress following elasticity theory for finite strains
+ * ComputeElasticSmearedCrackingStress computes the stress for a finite strain elastic
+ * model with smeared cracking
  */
-class ComputeElasticStressWithSmearedCracking : public ComputeStressBase
+class ComputeElasticSmearedCrackingStress : public ComputeStressBase
 {
 public:
-  ComputeElasticStressWithSmearedCracking(const InputParameters & parameters);
+  ComputeElasticSmearedCrackingStress(const InputParameters & parameters);
 
   enum CRACKING_RELEASE
   {
@@ -34,12 +35,12 @@ protected:
   void updateElasticityTensor();
   
   virtual void crackingStressRotation();
-  virtual Real computeCrackFactor( int i, Real & sigma, Real & flagVal );
+  virtual Real computeCrackFactor(int i, Real & sigma, Real & flagVal);
 
   virtual unsigned int getNumKnownCrackDirs() const;
-  void computeCrackStrainAndOrientation( ColumnMajorMatrix & principal_strain );
+  void computeCrackStrainAndOrientation(ColumnMajorMatrix & principal_strain);
 
-  void applyCracksToTensor( RankTwoTensor & tensor, const RealVectorValue & sigma );
+  void applyCracksToTensor(RankTwoTensor & tensor, const RealVectorValue & sigma);
   
   const MaterialProperty<RankTwoTensor> & _mechanical_strain;
 
@@ -61,14 +62,12 @@ protected:
   std::vector<unsigned int> _active_crack_planes;
   const unsigned int _max_cracks;
   const Real _cracking_neg_fraction;
-
+  RealVectorValue _crack_flags_local;
+  ColumnMajorMatrix _principal_strain;
   
-
-  
-  //material properties related to smeared cracking model
+  //stateful material properties related to smeared cracking model
   MaterialProperty<RealVectorValue> * _crack_flags;
   MaterialProperty<RealVectorValue> * _crack_flags_old;
-  RealVectorValue _crack_flags_local;
   MaterialProperty<RealVectorValue> * _crack_count;
   MaterialProperty<RealVectorValue> * _crack_count_old;
   MaterialProperty<RankTwoTensor> * _crack_rotation;
@@ -77,7 +76,6 @@ protected:
   MaterialProperty<RealVectorValue> * _crack_strain_old;
   MaterialProperty<RealVectorValue> * _crack_max_strain;
   MaterialProperty<RealVectorValue> * _crack_max_strain_old;
-  ColumnMajorMatrix _principal_strain;
 
   ElasticityTensorR4  _local_elasticity_tensor;
 
@@ -96,7 +94,6 @@ protected:
     std::string name(_base_name + prop_name);
     return declarePropertyOld<T>(name);
   }
-
 };
 
-#endif //COMPUTEELASTICSTRESSWITHSMEAREDCRACKING_H
+#endif //COMPUTEELASTICSMERAEDCRACKINGSTRESS_H

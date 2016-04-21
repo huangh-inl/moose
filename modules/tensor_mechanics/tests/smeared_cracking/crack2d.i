@@ -163,7 +163,7 @@
   [../]
 
   [./elastic_stress]
-    type = ComputeElasticStressWithSmearedCracking
+    type = ComputeElasticSmearedCrackingStress
     block = 1
     cracking_release = exponential
     cracking_stress = 1.0
